@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
-import { HOLD_RAMP, INTRO_DURATION, REVEAL_FALLBACK_MS, SIM_SIZE } from "./config";
+import { HOLD_RAMP, INTRO_DURATION, REVEAL_FALLBACK_MS, resolveCoreTransition, SIM_SIZE } from "./config";
 import { STOPS } from "./content";
 import { buildTargets } from "./shapes";
 import { FieldScene } from "./FieldScene";
@@ -59,14 +59,16 @@ export default function FieldHome() {
 
     (async () => {
       const simSize = window.innerWidth < 768 ? SIM_SIZE.mobile : SIM_SIZE.desktop;
-      const targets = await buildTargets(simSize);
+      // Final-leg showpiece variant (streams → core): ?transition=braid|crystal|warp
+      const transition = resolveCoreTransition();
+      const targets = await buildTargets(simSize, transition);
       if (disposed) {
         targets.stops.forEach((t) => t.dispose());
         targets.planets.forEach((t) => t.dispose());
         return;
       }
 
-      const s = (scene = new FieldScene(canvasEl, simSize, targets));
+      const s = (scene = new FieldScene(canvasEl, simSize, targets, transition));
       s.start();
 
       const j = (journey = buildJourney({
@@ -74,6 +76,7 @@ export default function FieldHome() {
         kinds: STOPS.map((stop) => stop.kind),
         trigger: wrapEl,
         panels: panels.current,
+        transition,
         onActive: (i) => setActive((cur) => (cur === i ? cur : i)),
         onProgress: (p) => {
           if (meterFill.current) meterFill.current.style.transform = `scaleX(${p})`;

@@ -2,7 +2,7 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import type { FieldScene } from "./FieldScene";
 import type { StopKind } from "./content";
-import { HERO_HOLD, HOLD, SEGMENTS } from "./config";
+import { HERO_HOLD, HOLD, SEGMENTS, type CoreTransition } from "./config";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -11,6 +11,8 @@ interface JourneyOptions {
   kinds: StopKind[];
   trigger: HTMLElement;
   panels: HTMLElement[];
+  /** active final-leg variant — the core copy forms to match it */
+  transition: CoreTransition;
   onActive: (index: number) => void;
   onProgress: (progress: number) => void;
 }
@@ -31,7 +33,7 @@ export interface Journey {
  * (docs/TRANSITION_PHILOSOPHY.md Rule 1: never repeat a transition style);
  * leaving is always the same quick dissolution — the field reclaiming it.
  */
-export function buildJourney({ scene, kinds, trigger, panels, onActive, onProgress }: JourneyOptions): Journey {
+export function buildJourney({ scene, kinds, trigger, panels, transition, onActive, onProgress }: JourneyOptions): Journey {
   panels.forEach((el) => prime(el));
 
   // Panel 0 is revealed by the loader-handoff intro, so it starts "active".
@@ -39,7 +41,7 @@ export function buildJourney({ scene, kinds, trigger, panels, onActive, onProgre
   const setActive = (i: number) => {
     if (i === active) return;
     if (active >= 0 && panels[active]) conceal(panels[active]);
-    if (i >= 0 && panels[i]) reveal(panels[i], kinds[i]);
+    if (i >= 0 && panels[i]) reveal(panels[i], kinds[i], transition);
     active = i;
     onActive(i);
   };
@@ -77,7 +79,7 @@ export function buildJourney({ scene, kinds, trigger, panels, onActive, onProgre
 
 /* ── arrival choreographies — one identity per destination ── */
 
-function reveal(panel: HTMLElement, kind: StopKind) {
+function reveal(panel: HTMLElement, kind: StopKind, transition: CoreTransition) {
   const els = items(panel);
   switch (kind) {
     case "orbits":
@@ -108,18 +110,43 @@ function reveal(panel: HTMLElement, kind: StopKind) {
       break;
 
     case "core":
-      // docking: elements converge on the centreline from alternating sides
+      // the climax copy forms to match the active transition (see revealCore)
       gsap.set(els, { clipPath: "inset(0 0% 0 0)", y: 0, skewY: 0 });
-      gsap.fromTo(
-        els,
-        { autoAlpha: 0, x: (n) => (n % 2 ? 70 : -70), scale: 1.04 },
-        { autoAlpha: 1, x: 0, scale: 1, duration: 0.9, stagger: 0.07, ease: "back.out(1.4)", overwrite: true }
-      );
+      revealCore(els, transition);
       break;
 
     default:
       // hero re-entry (scrolling back up): simple rise inside the field bloom
       gsap.to(els, { autoAlpha: 1, y: 0, duration: 0.7, stagger: 0.06, ease: "power3.out", overwrite: true });
+  }
+}
+
+/**
+ * Core panel arrival — one text formation per final-leg variant, so the copy
+ * tells the same story the camera and field do:
+ *   braid   → lines interlace in from alternating sides, twist unwinding (weave)
+ *   crystal → a fast angular skew-scale that locks crisply into place (facet)
+ *   warp    → rush in from depth with motion blur resolving (through the membrane)
+ */
+function revealCore(els: NodeListOf<HTMLElement>, transition: CoreTransition) {
+  if (transition === "braid") {
+    gsap.fromTo(
+      els,
+      { autoAlpha: 0, x: (n) => (n % 2 ? 64 : -64), rotation: (n) => (n % 2 ? 3 : -3), transformOrigin: "center center" },
+      { autoAlpha: 1, x: 0, rotation: 0, duration: 0.95, stagger: 0.1, ease: "power3.out", overwrite: true }
+    );
+  } else if (transition === "crystal") {
+    gsap.fromTo(
+      els,
+      { autoAlpha: 0, scale: 1.09, skewX: -9, transformOrigin: "left center" },
+      { autoAlpha: 1, scale: 1, skewX: 0, duration: 0.42, stagger: 0.055, ease: "power4.out", overwrite: true }
+    );
+  } else {
+    gsap.fromTo(
+      els,
+      { autoAlpha: 0, scale: 1.6, y: 14, filter: "blur(12px)" },
+      { autoAlpha: 1, scale: 1, y: 0, filter: "blur(0px)", duration: 0.72, stagger: 0.05, ease: "power2.out", overwrite: true }
+    );
   }
 }
 

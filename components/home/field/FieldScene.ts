@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { GPUComputationRenderer, type Variable } from "three/examples/jsm/misc/GPUComputationRenderer.js";
 import { POINT_FRAG, POINT_VERT, POSITION_SHADER, VELOCITY_SHADER } from "./glsl";
-import { CAMERA_STOPS, CAM_DIST, COLORS, FOV, GAP, PARALLAX, POINT, SEGMENTS, SHAPE_W } from "./config";
+import {
+  BRAID_CAM, BRAID_SIM, CAMERA_STOPS, CAM_DIST, COLORS, CORE_MODE, CRYSTAL_CAM, CRYSTAL_SIM,
+  FOV, GAP, PARALLAX, PLANET_LABEL, POINT, SEGMENTS, SHAPE_FRACTION, SHAPE_W, WARP_CAM, WARP_SIM,
+  type CoreTransition,
+} from "./config";
 import type { FieldTargets } from "./shapes";
 
 /**
@@ -39,6 +43,8 @@ export class FieldScene {
   private readonly pointMat: THREE.ShaderMaterial;
   private readonly points: THREE.Points;
   private readonly targets: FieldTargets;
+  /** Active final-leg showpiece (1 braid · 2 crystal · 3 warp); see config CORE_MODE. */
+  private readonly coreMode: number;
 
   private lastFrameMs = 0;
   private time = 0;
@@ -49,8 +55,9 @@ export class FieldScene {
   private readonly tmp = new THREE.Vector3();
   private readonly focus = new THREE.Vector3();
 
-  constructor(canvas: HTMLCanvasElement, simSize: number, targets: FieldTargets) {
+  constructor(canvas: HTMLCanvasElement, simSize: number, targets: FieldTargets, transition: CoreTransition) {
     this.targets = targets;
+    this.coreMode = CORE_MODE[transition];
     const w = window.innerWidth;
     const h = window.innerHeight;
     const isMobile = w < 768;
@@ -95,6 +102,9 @@ export class FieldScene {
       uTravelMode: { value: 0 },
       uFlow: { value: 0 },
       uCenterZ: { value: 0 },
+      uCoreMode: { value: 0 },
+      uCoreInfall: { value: 0 },
+      uCoreEvent: { value: 0 },
       uPointer: { value: new THREE.Vector3(0, 0, 1e6) },
       uBurstPos: { value: new THREE.Vector3() },
       uTargetA: { value: targets.stops[0] },
@@ -108,12 +118,18 @@ export class FieldScene {
     /* ── render side: one Points draw ── */
     const count = simSize * simSize;
     const refs = new Float32Array(count * 3);
+    // First `band` of the formation's slots spell the hovered project's name
+    // (see planetVariant); flag them so the shader can tint the label accent.
+    const labels = new Float32Array(count);
+    const labelCount = Math.floor(count * SHAPE_FRACTION * PLANET_LABEL.band);
     for (let i = 0; i < count; i++) {
       refs[i * 3] = ((i % simSize) + 0.5) / simSize;
       refs[i * 3 + 1] = (Math.floor(i / simSize) + 0.5) / simSize;
+      if (i < labelCount) labels[i] = 1;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(refs, 3));
+    geo.setAttribute("aLabel", new THREE.BufferAttribute(labels, 1));
 
     this.pointMat = new THREE.ShaderMaterial({
       vertexShader: POINT_VERT,
@@ -129,6 +145,8 @@ export class FieldScene {
         uColor: { value: new THREE.Color(COLORS.fg) },
         uAccent: { value: new THREE.Color(COLORS.accent) },
         uOpacity: { value: POINT.opacity },
+        uHoverMix: { value: 0 },
+        uCrystalGlint: { value: 0 },
       },
     });
     this.points = new THREE.Points(geo, this.pointMat);
@@ -199,6 +217,10 @@ export class FieldScene {
     const p = jp - i;
     const swing = Math.sin(p * Math.PI);
     const seg = SEGMENTS[i];
+    // The last leg (streams → core) is the collapse showpiece — camera and
+    // physics both diverge from the generic per-leg manoeuvre.
+    const isFinalLeg = i === last - 1;
+    let crystalGlint = 0; // refraction band progress, driven on the crystal leg
 
     let texA: THREE.Texture = this.targets.stops[i];
     let texB: THREE.Texture = this.targets.stops[i + 1];
@@ -218,10 +240,48 @@ export class FieldScene {
     const planeZ = -jp * GAP;
     const a = CAMERA_STOPS[i];
     const b = CAMERA_STOPS[i + 1];
-    const az = THREE.MathUtils.lerp(a.az, b.az, p) + swing * seg.azSwing;
-    const el = THREE.MathUtils.lerp(a.el, b.el, p);
-    const dist =
-      CAM_DIST * THREE.MathUtils.lerp(a.dist, b.dist, p) * (1 + swing * seg.dip) - this.hold * 4;
+
+    let az = THREE.MathUtils.lerp(a.az, b.az, p);
+    let el = THREE.MathUtils.lerp(a.el, b.el, p);
+    let distMul = THREE.MathUtils.lerp(a.dist, b.dist, p);
+    let roll = 0;
+    let fov = FOV;
+    if (isFinalLeg && this.coreMode === 1) {
+      // BRAID — spiral along the thread: azimuth arcs out and back with a slight
+      // lift and bank, distance eases straight in. Reads as travelling a braid.
+      az += swing * BRAID_CAM.sweep;
+      el += swing * BRAID_CAM.lift;
+      roll = swing * BRAID_CAM.bank;
+    } else if (isFinalLeg && this.coreMode === 2) {
+      // CRYSTAL — hold back and approach slowly, then a deliberate one-way turn
+      // reveals the facets and the camera snaps to rest as the lattice locks. A
+      // brief dolly recoil at the lock sells the "click". Stays upright (no roll).
+      const approach = THREE.MathUtils.smoothstep(p, 0, CRYSTAL_CAM.lockP);
+      const snap = THREE.MathUtils.smoothstep(p, CRYSTAL_CAM.lockP, CRYSTAL_CAM.lockP + 0.06);
+      distMul = THREE.MathUtils.lerp(a.dist * CRYSTAL_CAM.pullBack, b.dist, approach);
+      distMul -= Math.sin(snap * Math.PI) * CRYSTAL_CAM.recoil; // dip past rest, then settle
+      az += THREE.MathUtils.lerp(0, CRYSTAL_CAM.turn, approach); // turn lands and holds
+      el += swing * CRYSTAL_CAM.lift;
+    } else if (isFinalLeg) {
+      // WARP — forward rush: plunge close as the camera flies through the tunnel,
+      // tilt during the rush, then settle; a brief fov punch sells the speed.
+      const rush = THREE.MathUtils.smoothstep(p, 0.1, 0.7);
+      const arrive = THREE.MathUtils.smoothstep(p, 0.7, 1);
+      distMul = THREE.MathUtils.lerp(a.dist, b.dist * WARP_CAM.through, rush);
+      distMul = THREE.MathUtils.lerp(distMul, b.dist, arrive);
+      roll = rush * (1 - arrive) * WARP_CAM.tilt;
+      fov = FOV + rush * (1 - arrive) * WARP_CAM.fovKick;
+    } else {
+      // generic per-leg manoeuvre (untouched legs 1–3)
+      az += swing * seg.azSwing;
+      distMul *= 1 + swing * seg.dip;
+      roll = swing * seg.roll;
+    }
+    const dist = CAM_DIST * distMul - this.hold * 4;
+    if (Math.abs(this.camera.fov - fov) > 0.01) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
 
     this.focus.set(this.pointerLerped.x * PARALLAX.x * 0.4, this.pointerLerped.y * PARALLAX.y * 0.4, planeZ);
     this.camera.position.set(
@@ -230,7 +290,7 @@ export class FieldScene {
       this.focus.z + dist * Math.cos(az) * Math.cos(el)
     );
     this.camera.lookAt(this.focus);
-    this.camera.rotateZ(swing * seg.roll + this.pointerLerped.x * PARALLAX.roll);
+    this.camera.rotateZ(roll + this.pointerLerped.x * PARALLAX.roll);
 
     /* pointer → world on the active formation plane */
     if (this.pointerNdc.x < 1.5) {
@@ -252,6 +312,39 @@ export class FieldScene {
     u.uTravelMode.value = formless > 0.001 ? seg.mode : 0;
     u.uFlow.value = Math.max(0, 1 - Math.abs(jp - 3) * 2.5);
     u.uCenterZ.value = planeZ;
+
+    // Final-leg showpiece: the active variant owns the motion. Disable the
+    // generic manoeuvre and drive uCoreInfall (primary force) + uCoreEvent
+    // (punctuation beat). uFormless tunes how fluid (high) vs. crisp (low) the
+    // field stays per variant. Other legs leave these at zero.
+    if (isFinalLeg) {
+      u.uTravelMode.value = 0;
+      u.uCoreMode.value = this.coreMode;
+      if (this.coreMode === 1) {
+        // braid: ease the weave in (fluid), then coil into the core near the end
+        u.uCoreInfall.value = Math.sin(Math.min(p, 1) * Math.PI * 0.5);
+        u.uCoreEvent.value = THREE.MathUtils.smoothstep(p, BRAID_SIM.coilFrom, BRAID_SIM.coilTo);
+        u.uFormless.value = 1 - THREE.MathUtils.smoothstep(p, 0.85, 1);
+      } else if (this.coreMode === 2) {
+        // crystal: low noise so it seats crisply onto the lattice, hard lock late
+        u.uCoreInfall.value = THREE.MathUtils.smoothstep(p, CRYSTAL_SIM.from, CRYSTAL_SIM.to);
+        u.uCoreEvent.value = Math.exp(-Math.pow((p - CRYSTAL_SIM.lockAt) / CRYSTAL_SIM.lockWidth, 2));
+        u.uFormless.value = CRYSTAL_SIM.noise * (1 - THREE.MathUtils.smoothstep(p, 0.7, 0.95));
+        // refraction glint sweeps across the facets through the lock window
+        if (p > CRYSTAL_SIM.glintFrom && p < CRYSTAL_SIM.glintTo) {
+          crystalGlint = (p - CRYSTAL_SIM.glintFrom) / (CRYSTAL_SIM.glintTo - CRYSTAL_SIM.glintFrom);
+        }
+      } else {
+        // warp: fluid tunnel rush, then the membrane punch detonates outward
+        u.uCoreInfall.value = THREE.MathUtils.smoothstep(p, WARP_SIM.from, WARP_SIM.to);
+        u.uCoreEvent.value = Math.exp(-Math.pow((p - WARP_SIM.punchAt) / WARP_SIM.punchWidth, 2));
+        u.uFormless.value = 1 - THREE.MathUtils.smoothstep(p, 0.72, 0.96);
+      }
+    } else {
+      u.uCoreMode.value = 0;
+      u.uCoreInfall.value = 0;
+      u.uCoreEvent.value = 0;
+    }
     (u.uPointer.value as THREE.Vector3).copy(this.pointerWorld);
     u.uTargetA.value = texA;
     u.uTargetB.value = texB;
@@ -261,6 +354,8 @@ export class FieldScene {
     /* ── draw ── */
     this.pointMat.uniforms.texturePosition.value = this.gpu.getCurrentRenderTarget(this.posVar).texture;
     this.pointMat.uniforms.textureVelocity.value = this.gpu.getCurrentRenderTarget(this.velVar).texture;
+    // Light the name label only while the field is gathered into a hover planet.
+    this.pointMat.uniforms.uHoverMix.value = this.hoverMix;
     this.renderer.render(this.scene, this.camera);
   }
 }

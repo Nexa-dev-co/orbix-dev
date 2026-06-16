@@ -98,6 +98,9 @@ uniform float uBurstAge;
 uniform float uTravelMode; // 0 none · 1 pull · 2 formation · 3 streams · 4 docking
 uniform float uFlow;       // parked-on-streams circulation
 uniform float uCenterZ;    // z of the current focus plane
+uniform float uCoreMode;   // final-leg showpiece: 0 none · 1 braid · 2 crystal · 3 warp
+uniform float uCoreInfall; // primary core-transition force, 0..1
+uniform float uCoreEvent;  // punctuation event, 0..1 (coil-in / lattice lock / membrane punch)
 uniform vec3 uPointer;
 uniform vec3 uBurstPos;
 uniform sampler2D uTargetA;
@@ -152,6 +155,55 @@ void main() {
     }
   }
 
+  // ── final-leg showpiece (streams → core): three switchable identities ──
+  // The generic manoeuvre is off on this leg (uTravelMode = 0) so the active
+  // variant fully owns the motion. uCoreInfall is the primary force; uCoreEvent
+  // is the punctuating beat. Variant chosen by ?transition= (see config.ts).
+  vec3 centre = vec3(0.0, 0.0, uCenterZ);
+  if (uCoreMode > 0.5 && uCoreInfall > 0.001) {
+    float F = uCoreInfall;
+    if (uCoreMode < 1.5) {
+      // BRAID: converge onto a thin thread around the axis while twisting; the
+      // twist phase varies with depth so the four streams read as weaving into
+      // one. radial pulls onto the tube, tang twists it.
+      float threadR = mix(9.0, 0.8, F);
+      vel += -radial * (rl - threadR) * 6.0 * F * uDelta;
+      float phase = rel.z * 0.28 + uTime * 1.6;
+      vel += tang * (16.0 + sin(phase) * 18.0) * F * uDelta;
+    } else if (uCoreMode < 2.5) {
+      // CRYSTAL: supercooled → ordered. A fast shimmer agitates the field as it
+      // nears the lattice (a liquid about to crystallize), then drains out as F
+      // rises so the gem visibly *stills* and seats — energy ordering into
+      // structure rather than just fading in.
+      float shimmer = (1.0 - F) * 7.0;
+      vel += curl(pos * 0.5 + uTime * 3.0) * shimmer * uDelta;
+      vel -= vel * F * 6.0 * uDelta;
+    } else {
+      // WARP: stretch into a tunnel — drive along -z (into the screen) and a
+      // little outward so particles streak past the flying camera.
+      vel += vec3(0.0, 0.0, -1.0) * 64.0 * F * uDelta;
+      vel += radial * 7.0 * F * uDelta;
+    }
+  }
+  if (uCoreEvent > 0.001) {
+    float E = uCoreEvent;
+    if (uCoreMode < 1.5) {
+      // braid resolve: the thread coils inward into the core
+      vel += -radial * E * 46.0 * uDelta;
+    } else if (uCoreMode < 2.5) {
+      // crystal lock: the lattice seizes — a hard pull onto the exact gem
+      // positions plus a clamp, so the facets click into place crisply (a
+      // decisive snap, not a soft settle). target is the gem (top of main).
+      vel += (target - pos) * E * 26.0 * uDelta;
+      vel -= vel * E * 10.0 * uDelta;
+    } else {
+      // warp membrane punch: the sheet detonates outward as the camera breaks in
+      vec3 fromCentre = pos - centre;
+      float dCentre = max(length(fromCentre), 0.0001);
+      vel += (fromCentre / dCentre) * E * 230.0 * uDelta;
+    }
+  }
+
   // Parked on the data streams: signals keep circulating along the loops
   vel += tang * uFlow * home * 26.0 * uDelta;
 
@@ -201,15 +253,21 @@ uniform sampler2D texturePosition;
 uniform sampler2D textureVelocity;
 uniform float uSize;
 uniform float uPixelRatio;
+attribute float aLabel;
 varying float vSpeed;
 varying float vSeed;
 varying float vDepth;
+varying float vLabel;
+varying float vGlint;
 
 void main() {
   vec4 p = texture2D(texturePosition, position.xy);
   vec3 v = texture2D(textureVelocity, position.xy).xyz;
   vSpeed = length(v);
   vSeed = p.w;
+  vLabel = aLabel;
+  // diagonal coordinate (gem is centred at x=y=0) for the crystal glint sweep
+  vGlint = (p.x + p.y) * 0.7;
 
   vec4 mv = modelViewMatrix * vec4(p.xyz, 1.0);
   vDepth = -mv.z;
@@ -222,9 +280,13 @@ export const POINT_FRAG = /* glsl */ `
 uniform vec3 uColor;
 uniform vec3 uAccent;
 uniform float uOpacity;
+uniform float uHoverMix;
+uniform float uCrystalGlint; // 0 inactive · 0→1 sweeps a refraction band across the gem
 varying float vSpeed;
 varying float vSeed;
 varying float vDepth;
+varying float vLabel;
+varying float vGlint;
 
 void main() {
   float d = length(gl_PointCoord - 0.5);
@@ -233,6 +295,22 @@ void main() {
   // Fast particles flash the accent; a rare few are permanent embers
   float heat = smoothstep(8.0, 40.0, vSpeed) * 0.9 + step(0.992, fract(vSeed * 91.3)) * 0.55;
   vec3 col = mix(uColor, uAccent, min(heat, 1.0));
+
+  // Hover-planet label: the name particles glow accent and brighten so they
+  // read as a label across the white planet behind them.
+  float label = vLabel * uHoverMix;
+  col = mix(col, uAccent, label);
+  alpha *= 1.0 + label * 0.6;
+
+  // Crystal refraction glint: as the lattice locks, a bright accent band sweeps
+  // diagonally across the facets (uCrystalGlint travels 0→1), fading in and out.
+  if (uCrystalGlint > 0.001) {
+    float sweep = uCrystalGlint * 48.0 - 24.0;
+    float band = exp(-pow(vGlint - sweep, 2.0) * 0.05);
+    float intensity = sin(uCrystalGlint * 3.14159265);
+    col = mix(col, uAccent, band * intensity);
+    alpha *= 1.0 + band * intensity * 1.4;
+  }
 
   // Depth fade keeps far formations as faint constellations, not noise
   float fog = smoothstep(150.0, 36.0, vDepth) * 0.92 + 0.08;

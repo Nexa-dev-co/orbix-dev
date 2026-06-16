@@ -13,6 +13,9 @@ export const FOV = 50;
 /** World width the wordmark raster maps onto (height = half, raster is 2:1). */
 export const SHAPE_W = 64;
 
+/** Vertical offset (world units) lifting the wordmark above centre for breathing room. */
+export const WORDMARK_LIFT = 3.5;
+
 /**
  * Camera attitude at each destination (spherical around the focus point).
  * `az`/`el` in radians, `dist` multiplies CAM_DIST. The journey interpolates
@@ -39,6 +42,80 @@ export const SEGMENTS = [
   { mode: 4, duration: 1.5, azSwing: 0.15, dip: 0.12, roll: 0.04 },
 ];
 
+/**
+ * Showpiece variants for the final leg (streams → core). This transition is the
+ * journey's climax and ignores the generic SEGMENTS manoeuvre; three distinct
+ * languages are built so they can be compared live. Pick without code changes:
+ *   ?transition=braid | crystal | warp   (or 1|2|3, or random)
+ *
+ *   braid   — the four data streams weave into one luminous thread that winds
+ *             into the core (camera spirals along the braid)
+ *   crystal — flowing signal snaps onto a faceted crystal lattice; the core is
+ *             a hard angular gem, not a soft blob (camera orbits the facets)
+ *   warp    — the streams stretch into a tunnel the camera flies through and
+ *             punches a membrane to arrive in the core chamber
+ */
+export const CORE_TRANSITIONS = ["braid", "crystal", "warp"] as const;
+export type CoreTransition = (typeof CORE_TRANSITIONS)[number];
+export const DEFAULT_CORE_TRANSITION: CoreTransition = "crystal";
+
+/** Velocity-shader id per variant (uCoreMode); 0 = no core showpiece active. */
+export const CORE_MODE: Record<CoreTransition, number> = {
+  braid: 1,
+  crystal: 2,
+  warp: 3,
+};
+
+/**
+ * Resolve the active variant from the URL: `?transition=braid|crystal|warp`, a
+ * 1-based index (`1|2|3`), or `random`. Falls back to DEFAULT_CORE_TRANSITION.
+ */
+export function resolveCoreTransition(): CoreTransition {
+  if (typeof window === "undefined") return DEFAULT_CORE_TRANSITION;
+  const raw = new URLSearchParams(window.location.search)
+    .get("transition")
+    ?.trim()
+    .toLowerCase();
+  if (!raw) return DEFAULT_CORE_TRANSITION;
+  if (raw === "random")
+    return CORE_TRANSITIONS[
+      Math.floor(Math.random() * CORE_TRANSITIONS.length)
+    ];
+  const byIndex = CORE_TRANSITIONS[Number(raw) - 1];
+  if (byIndex) return byIndex;
+  return (CORE_TRANSITIONS as readonly string[]).includes(raw)
+    ? (raw as CoreTransition)
+    : DEFAULT_CORE_TRANSITION;
+}
+
+/**
+ * Per-variant camera language for the final leg. Distances multiply the leg's
+ * CAMERA_STOPS entries; angles are radians; keyframes/widths are in leg-progress
+ * p (0..1). Force magnitudes themselves live in the velocity shader (glsl.ts).
+ */
+export const BRAID_CAM = { sweep: 1.4, lift: 0.16, bank: 0.25 }; // spiral arc around the thread
+export const BRAID_SIM = { coilFrom: 0.78, coilTo: 1.0 }; // p-range the thread coils into the core
+// crystallization: hold back, turn to reveal the facets, then snap-lock with a
+// refraction glint. `turn` is a one-way reveal that lands and holds (not a sweep
+// back); `recoil` is a brief dolly dip at the lock that sells the "click".
+export const CRYSTAL_CAM = { turn: 0.5, lift: 0.14, pullBack: 1.22, lockP: 0.72, recoil: 0.08 };
+export const CRYSTAL_SIM = {
+  from: 0.1,
+  to: 0.7,
+  lockAt: 0.72,
+  lockWidth: 0.06,
+  noise: 0.22,
+  glintFrom: 0.66, // a bright band sweeps across the facets as the lattice locks
+  glintTo: 0.88,
+};
+export const WARP_CAM = { through: 0.34, tilt: 0.18, fovKick: 22 }; // forward rush + fov punch
+export const WARP_SIM = {
+  from: 0.08,
+  to: 0.65,
+  punchAt: 0.72,
+  punchWidth: 0.05,
+};
+
 /** Scroll timeline units: hold length on each destination. */
 export const HOLD = 0.55;
 export const HERO_HOLD = 0.7;
@@ -61,11 +138,34 @@ export const COLORS = {
   accent: 0xff3d1f,
 };
 
-/** Fraction of particles that belong to the formation; the rest drift free. */
-export const SHAPE_FRACTION = 0.7;
+/**
+ * Fraction of particles that belong to the formation; the rest drift free as the
+ * ambient starfield. Raised to thin that starfield — the surplus goes into the
+ * formation, where additive saturation hides it, so the wordmark reads unchanged.
+ */
+export const SHAPE_FRACTION = 0.95;
 
 /** Home-pull strength for free (non-formation) particles. */
 export const AMBIENT_PULL = 0.12;
+
+/**
+ * Hover planet (planets stop): when a project row is hovered the whole field
+ * gathers into that one planet, and a slice of its particles spell the project
+ * name as a label floating in front of the sphere (tinted accent at render so it
+ * reads over the white planet).
+ *   band     — fraction of the planet's particles given to the name
+ *   height   — name height as a fraction of the planet radius
+ *   maxWidth — cap the name width at this × radius (long names shrink to fit)
+ *   front    — world units the name floats ahead of the planet surface
+ *   y        — vertical offset of the name from the planet centre
+ */
+export const PLANET_LABEL = { band: 0.3, height: 0.62, maxWidth: 3.0, front: 2.5, y: 0 };
+
+/**
+ * World-x the hovered planet gathers to. Shifting it onto the right half clears
+ * the project list on the left, so the planet + name read cleanly over the dark.
+ */
+export const PLANET_HOVER_X = 15;
 
 /** How long the press-and-hold takes to reach full collapse. */
 export const HOLD_RAMP = 1.15;

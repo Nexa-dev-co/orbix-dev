@@ -25,11 +25,11 @@ export default function OrbitMap() {
   const [mode, setMode] = useState<CameraMode>("fly");
   const [reduced, setReduced] = useState(false);
 
-  const jumpTo = (i: number) => {
-    const t = triggerRef.current;
-    const rest = restPoints.current[i];
-    if (!t || rest == null) return;
-    window.scrollTo({ top: t.start + rest * (t.end - t.start), behavior: "smooth" });
+  const jumpTo = (index: number) => {
+    const trigger = triggerRef.current;
+    const rest = restPoints.current[index];
+    if (!trigger || rest == null) return;
+    window.scrollTo({ top: trigger.start + rest * (trigger.end - trigger.start), behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function OrbitMap() {
       trigger: wrapEl,
       panels: panels.current,
       dip: DIP[camMode],
-      onActive: (i) => setActive((cur) => (cur === i ? cur : i)),
+      onActive: (index) => setActive((current) => (current === index ? current : index)),
     });
     restPoints.current = journey.restPoints;
     triggerRef.current = { start: journey.scrollTrigger.start, end: journey.scrollTrigger.end };
@@ -76,10 +76,10 @@ export default function OrbitMap() {
   if (reduced) {
     return (
       <div style={{ background: "var(--bg)", color: "var(--fg)" }}>
-        {SECTIONS.map((s) => (
-          <section key={s.nav} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "6vh 8vw", textAlign: "center" }}>
+        {SECTIONS.map((section) => (
+          <section key={section.nav} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "6vh 8vw", textAlign: "center" }}>
             <div style={{ maxWidth: 720, width: "100%" }}>
-              <SectionPanel section={s} />
+              <SectionPanel section={section} />
             </div>
           </section>
         ))}
@@ -90,13 +90,13 @@ export default function OrbitMap() {
   return (
     <div ref={wrap} style={{ position: "relative", height: `${SECTIONS.length * 120}vh`, background: "var(--bg)" }}>
       <canvas ref={canvas} aria-hidden style={{ position: "fixed", inset: 0, width: "100%", height: "100%", zIndex: 0 }} />
-      <div style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none", background: "radial-gradient(circle at 50% 45%, transparent 45%, rgba(6,6,6,0.55) 100%)" }} />
+      <div style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none", background: "radial-gradient(circle at 50% 45%, transparent 45%, color-mix(in srgb, var(--bg) 55%, transparent) 100%)" }} />
 
-      {SECTIONS.map((s, i) => (
+      {SECTIONS.map((section, index) => (
         <div
-          key={s.nav}
-          ref={(el) => {
-            if (el) panels.current[i] = el;
+          key={section.nav}
+          ref={(element) => {
+            if (element) panels.current[index] = element;
           }}
           style={{
             position: "fixed",
@@ -107,12 +107,12 @@ export default function OrbitMap() {
             justifyContent: "center",
             padding: "0 8vw",
             color: "var(--fg)",
-            opacity: i === 0 ? 1 : 0,
-            pointerEvents: i === active ? "auto" : "none",
+            opacity: index === 0 ? 1 : 0,
+            pointerEvents: index === active ? "auto" : "none",
           }}
         >
-          <div style={{ maxWidth: 760, width: "100%", textAlign: s.kind === "about" || s.kind === "contact" ? "center" : "left" }}>
-            <SectionPanel section={s} />
+          <div style={{ maxWidth: 760, width: "100%", textAlign: section.kind === "about" || section.kind === "contact" ? "center" : "left" }}>
+            <SectionPanel section={section} />
           </div>
         </div>
       ))}

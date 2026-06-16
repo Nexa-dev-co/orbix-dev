@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import OrbitMap from "@/components/prototype/OrbitMap";
+import OrbitMap from "@/components/prototype/OrbitMap/OrbitMap";
 
 // 3D version is WebGL — load client-only so `three` stays out of the server graph
 const OrbitMap3D = dynamic(() => import("@/components/prototype/orbit"), {

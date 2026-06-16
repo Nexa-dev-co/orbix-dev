@@ -18,8 +18,8 @@ export function SplitChars({
 }) {
   return (
     <span className={className} aria-label={text}>
-      {text.split("").map((char, i) => (
-        <Fragment key={i}>
+      {text.split("").map((char, index) => (
+        <Fragment key={index}>
           <span
             className="char"
             style={{ display: "inline-block" }}

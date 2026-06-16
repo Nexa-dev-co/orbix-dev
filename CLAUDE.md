@@ -1,286 +1,3 @@
-# CLAUDE.md
-
-## Project Overview
-
-Project Name: Orbix
-
-Orbix is a premium software company specializing in:
-
-- Custom Web Applications
-- SaaS Platforms
-- Enterprise CRM Systems
-- Mobile Applications
-- AI Solutions
-- Digital Product Design
-
-The name "Orbix" originates from orbital systems, gravitational movement, celestial mechanics, and interconnected ecosystems.
-
-The website is not a marketing page.
-
-The website itself must be a demonstration of Orbix's capabilities.
-
-Every interaction, animation, transition, and visual element should communicate:
-
-- Innovation
-- Technical Excellence
-- Precision Engineering
-- Premium Quality
-- Future Thinking
-
----
-
-# Primary Objective
-
-The goal of this project is not merely to build a beautiful website.
-
-The goal is to create a website that can realistically compete on Awwwards.
-
-Every design decision, animation, interaction, layout, component, and piece of content must be evaluated against this question:
-
-"Would this feel impressive when compared against recent Awwwards winners?"
-
-If the answer is no:
-
-Do not implement it.
-
-Instead propose something more original, memorable, immersive, or technically impressive.
-
----
-
-# Creative Principles
-
-## Principle 1: Avoid Generic Agency Design
-
-Never generate:
-
-- Generic hero sections
-- Generic gradient backgrounds
-- Generic floating cards
-- Generic feature grids
-- Generic SaaS landing page layouts
-- Generic Framer-style templates
-- Generic startup aesthetics
-
-If a section resembles a typical agency website:
-
-Reject it.
-
----
-
-## Principle 2: Create Experiences, Not Pages
-
-Every section should feel like an experience.
-
-Examples:
-
-- Orbital systems reacting to cursor movement
-- Dynamic 3D worlds
-- Interactive storytelling
-- Scroll-driven transformations
-- Immersive scene transitions
-- Cinematic camera movements
-- Environmental effects
-- Particle systems
-- Physics-driven interactions
-
-The website should feel alive.
-
----
-
-## Principle 3: Motion First
-
-Motion is a core design language.
-
-Every transition should have intention.
-
-Avoid:
-
-- Basic fade-ins
-- Basic slide-ins
-- Generic scroll reveals
-
-Prefer:
-
-- Morphing objects
-- Spatial transitions
-- Depth-based movement
-- Camera travel
-- Object transformation
-- Procedural animation
-
-Motion should communicate meaning.
-
----
-
-## Principle 4: Use 3D Purposefully
-
-3D should not be decoration.
-
-Every 3D element must support the narrative.
-
-Potential themes:
-
-- Orbiting systems
-- Planetary mechanics
-- Connected ecosystems
-- Data universes
-- Artificial intelligence structures
-- Digital galaxies
-- Abstract technological architectures
-
-3D must feel premium and cinematic.
-
----
-
-## Principle 5: Design for Emotional Impact
-
-Users should experience:
-
-1. Curiosity
-2. Wonder
-3. Engagement
-4. Trust
-5. Excitement
-
-The site should create moments that users want to share.
-
----
-
-# Awwwards Evaluation Framework
-
-Before implementing any feature, score it from 1-10 in the following categories:
-
-## Creativity
-
-Is it original?
-
-## Innovation
-
-Have users seen this before?
-
-## Interaction
-
-Does it create engagement?
-
-## Visual Design
-
-Does it look premium?
-
-## Motion
-
-Does animation elevate the experience?
-
-## Technical Excellence
-
-Does it demonstrate advanced engineering?
-
-## Memorability
-
-Will users remember it tomorrow?
-
-Any concept scoring below 8 in any category should be redesigned.
-
----
-
-# Orbix Brand Personality
-
-Orbix is:
-
-- Visionary
-- Intelligent
-- Precise
-- Premium
-- Futuristic
-- Confident
-
-Orbix is not:
-
-- Corporate
-- Boring
-- Generic
-- Minimal for the sake of minimalism
-- Trend-following
-
-Orbix should feel like a company that builds the future.
-
----
-
-# Technical Standards
-
-Framework:
-
-- Next.js
-- TypeScript
-
-Preferred Technologies:
-
-- React Three Fiber
-- Three.js
-- GSAP
-- Framer Motion
-- Lenis
-- Motion Path Animations
-- WebGL
-- GLSL Shaders
-- Custom Post Processing
-
-Avoid unnecessary dependencies.
-
-Favor custom implementations over generic libraries when they improve uniqueness.
-
----
-
-# Content Standards
-
-Never generate generic agency copy.
-
-Avoid phrases such as:
-
-- We build digital solutions
-- We transform businesses
-- We create innovative experiences
-- Your trusted partner
-
-Every headline should feel distinctive and memorable.
-
-Every sentence should reinforce the Orbix universe.
-
----
-
-# Performance Requirements
-
-Awwwards-level visuals must not sacrifice performance.
-
-Priorities:
-
-1. Smooth 60fps interactions
-2. Fast initial load
-3. Progressive enhancement
-4. Optimized assets
-5. Efficient WebGL rendering
-
-Visual ambition must coexist with engineering excellence.
-
----
-
-# Decision Rule
-
-Before proposing any feature, section, interaction, animation, or visual concept:
-
-Ask:
-
-1. Is this unique?
-2. Is this memorable?
-3. Is this technically impressive?
-4. Does it strengthen the Orbix identity?
-5. Could this appear on Awwwards?
-
-If not:
-
-Do not proceed.
-
-Create something better.
-
 # CLAUDE.md — orbix
 
 This file defines how code should be written, structured, and named in this codebase. Follow these rules in every suggestion, generation, and edit. This is a **pure frontend** Next.js project — no backend, no API routes, no database.
@@ -294,7 +11,6 @@ orbix is a cinematic, single-page **web-studio portfolio**: a long-scroll homepa
 **Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS
 
 **Animation & graphics:**
-
 - `GSAP` + `ScrollTrigger` (via `@gsap/react`'s `useGSAP`) — scroll-driven reveals, character/text effects, timeline sequencing
 - `Lenis` — smooth inertial scrolling, driven from the GSAP ticker so ScrollTrigger stays in sync
 - `Three.js` — WebGL scenes (hero canvas, work-card canvas, the 3D orbital-map prototype)
@@ -316,12 +32,12 @@ These are the canonical design tokens, defined as CSS variables in `app/globals.
 
 ```css
 :root {
-  --bg: #060606; /* page background — near-black */
-  --fg: #ebe8e0; /* foreground text — warm off-white */
-  --muted: rgba(235, 232, 224, 0.38); /* secondary / metadata text */
-  --accent: #00e5ff; /* signature electric cyan — CTAs, highlights, selection */
-  --border: rgba(235, 232, 224, 0.08); /* hairline dividers, card borders */
-  --card: #0d0d0d; /* elevated surfaces / cards */
+  --bg:     #060606;                      /* page background — near-black */
+  --fg:     #ebe8e0;                       /* foreground text — warm off-white */
+  --muted:  rgba(235, 232, 224, 0.38);     /* secondary / metadata text */
+  --accent: #00e5ff;                       /* signature electric cyan — CTAs, highlights, selection */
+  --border: rgba(235, 232, 224, 0.08);     /* hairline dividers, card borders */
+  --card:   #0d0d0d;                       /* elevated surfaces / cards */
 }
 ```
 
@@ -337,7 +53,6 @@ Two fonts, loaded via `next/font/google` in `app/layout.tsx` with `display: "swa
 ```
 
 **Usage rules:**
-
 - Display (Syne) → headings, hero text, section titles. Apply via the `font-display` Tailwind class or the `.font-display` helper.
 - Body (DM Sans) → paragraphs, nav, labels. This is the `<body>` default.
 - `.eyebrow` helper → small uppercased, letter-spaced kicker labels above headings.
@@ -354,15 +69,15 @@ Every load of the site is gated behind a fullscreen intro loader. This is orches
 
 There are several interchangeable loader variants under `components/loaders/`, each implementing the shared `LoaderProps` contract (`{ onComplete: () => void }`) and each responsible for honouring `prefers-reduced-motion` (resolve fast / skip the animation):
 
-| Key        | Component           | Idea                                     |
-| ---------- | ------------------- | ---------------------------------------- |
-| `orbital`  | `OrbitalTypeLoader` | orbiting type forms into the wordmark    |
-| `kinetic`  | `KineticLoader`     | kinetic typography (current **default**) |
-| `counter`  | `CounterLoader`     | percentage / counter count-up            |
-| `words`    | `WordRevealLoader`  | sequential word reveal                   |
-| `curtain`  | `CurtainLoader`     | panel/curtain wipe reveal                |
-| `stroke`   | `StrokeLoader`      | SVG stroke-draw                          |
-| `scramble` | `ScrambleLoader`    | text-scramble settle                     |
+| Key | Component | Idea |
+|---|---|---|
+| `orbital` | `OrbitalTypeLoader` | orbiting type forms into the wordmark |
+| `kinetic` | `KineticLoader` | kinetic typography (current **default**) |
+| `counter` | `CounterLoader` | percentage / counter count-up |
+| `words` | `WordRevealLoader` | sequential word reveal |
+| `curtain` | `CurtainLoader` | panel/curtain wipe reveal |
+| `stroke` | `StrokeLoader` | SVG stroke-draw |
+| `scramble` | `ScrambleLoader` | text-scramble settle |
 
 The registry, stable order, and default live in `components/loaders/index.ts` (`LOADERS`, `LOADER_ORDER`, `DEFAULT_LOADER`). Pick a variant without code changes via the URL:
 
@@ -420,18 +135,14 @@ public/
 ## Page-by-Page Notes
 
 ### Homepage (`/`)
-
 Long-scroll composition rendered by `app/page.tsx`, in order:
 `ShaderTransition` → `Navbar` → `Hero` → `Marquee` → `Statement` → `WorkGrid` → `Process` → `CtaBanner` → `Footer`, with `SectionDivider` between sections.
-
 - `Hero` uses a Three.js WebGL canvas background + headline with per-character GSAP reveal (`SplitChars`).
 - `Marquee` is a pure-CSS infinite scroll (see `.marquee` in `globals.css`), pausing on hover.
 - Section reveals use GSAP `ScrollTrigger` via the scoped `useGsap` hook.
 
 ### Prototype (`/prototype`)
-
 An orbital-map navigation concept, **isolated from the live site**.
-
 - Default is the **3D** WebGL map (`components/prototype/orbit`), loaded via `next/dynamic` with `ssr: false` so `three` stays out of the server graph.
 - `?view=2d` renders the 2D SVG alternative (`components/prototype/OrbitMap`).
 - Don't let prototype code leak into the homepage bundle.
@@ -468,8 +179,8 @@ const handleSubmit = (event: Event) => {};
 Verb-first, action-describing names:
 
 ```ts
-useGsap(); // scoped GSAP runner + prefers-reduced-motion gate
-useLenis(); // Lenis smooth-scroll lifecycle, synced to the GSAP ticker
+useGsap()   // scoped GSAP runner + prefers-reduced-motion gate
+useLenis()  // Lenis smooth-scroll lifecycle, synced to the GSAP ticker
 ```
 
 ### Components
@@ -491,7 +202,6 @@ PascalCase, named after what they render: `Hero` / `MagneticButton` / `PageLoade
 Every animation must feel **purposeful and cinematic**, not decorative.
 
 Rules:
-
 1. **The intro loader gates the site.** Don't bypass it with code edits; compare variants with the `?loader=` URL param.
 2. **Scroll reveals use GSAP `ScrollTrigger`** via the scoped `useGsap` hook — not hand-rolled Intersection Observers. This keeps animation logic centralized and auto-cleaned on unmount.
 3. **Lenis wraps the entire scroll.** It's initialised once (`useLenis`) and driven from the GSAP ticker; ScrollTrigger updates on its `scroll` event. Don't spin up a second scroll loop.

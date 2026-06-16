@@ -13,12 +13,12 @@ export default function OrbitHud({ sections, active, mode, onJump }: OrbitHudPro
   return (
     <>
       <nav style={railStyle}>
-        {sections.map((s, i) => {
-          const on = i === active;
+        {sections.map((section, index) => {
+          const isActive = index === active;
           return (
-            <button key={s.nav} onClick={() => onJump(i)} style={{ ...buttonStyle, color: on ? "var(--fg)" : "var(--muted)" }}>
-              <span className="eyebrow" style={{ opacity: on ? 1 : 0, transition: "opacity 0.3s" }}>{s.nav}</span>
-              <span style={{ width: on ? 26 : 14, height: 2, background: on ? "var(--accent)" : "var(--border)", transition: "all 0.35s" }} />
+            <button key={section.nav} onClick={() => onJump(index)} style={{ ...buttonStyle, color: isActive ? "var(--fg)" : "var(--muted)" }}>
+              <span className="eyebrow" style={{ opacity: isActive ? 1 : 0, transition: "opacity 0.3s" }}>{section.nav}</span>
+              <span style={{ width: isActive ? 26 : 14, height: 2, background: isActive ? "var(--accent)" : "var(--border)", transition: "all 0.35s" }} />
             </button>
           );
         })}

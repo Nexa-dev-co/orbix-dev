@@ -1,12 +1,12 @@
 import type { ComponentType } from "react";
 import type { LoaderProps } from "./types";
-import OrbitalTypeLoader from "./OrbitalTypeLoader";
-import KineticLoader from "./KineticLoader";
-import CounterLoader from "./CounterLoader";
-import WordRevealLoader from "./WordRevealLoader";
-import CurtainLoader from "./CurtainLoader";
-import StrokeLoader from "./StrokeLoader";
-import ScrambleLoader from "./ScrambleLoader";
+import OrbitalTypeLoader from "./OrbitalTypeLoader/OrbitalTypeLoader";
+import KineticLoader from "./KineticLoader/KineticLoader";
+import CounterLoader from "./CounterLoader/CounterLoader";
+import WordRevealLoader from "./WordRevealLoader/WordRevealLoader";
+import CurtainLoader from "./CurtainLoader/CurtainLoader";
+import StrokeLoader from "./StrokeLoader/StrokeLoader";
+import ScrambleLoader from "./ScrambleLoader/ScrambleLoader";
 
 export type LoaderKey =
   | "orbital"

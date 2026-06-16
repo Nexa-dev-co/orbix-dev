@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Syne, DM_Sans } from "next/font/google";
 import "./globals.css";
-import SmoothScroll from "@/components/effects/SmoothScroll";
-import CustomCursor from "@/components/effects/CustomCursor";
-import PageLoader from "@/components/effects/PageLoader";
-import Grain from "@/components/effects/Grain";
+import SmoothScroll from "@/components/effects/SmoothScroll/SmoothScroll";
+import CustomCursor from "@/components/effects/CustomCursor/CustomCursor";
+import PageLoader from "@/components/effects/PageLoader/PageLoader";
+import Grain from "@/components/effects/Grain/Grain";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -21,14 +21,14 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "orbix — software with gravity",
+  title: "orbix — Full-spectrum web studio",
   description:
-    "A software company building products with their own gravity. Custom web applications, SaaS platforms, enterprise CRM, mobile apps and AI systems.",
+    "We don't build websites. We build worlds. A small, fiercely focused studio crafting SaaS products, commerce platforms, campaigns and mobile-first apps.",
   metadataBase: new URL("https://orbix.studio"),
   openGraph: {
-    title: "orbix — software with gravity",
+    title: "orbix — We build worlds",
     description:
-      "Dive from the edge of the system to the core. Custom web applications, SaaS, CRM, mobile and AI — engineered to hold users in orbit.",
+      "Cinematic, story-driven web experiences. SaaS, commerce, campaigns, and mobile-first apps.",
     type: "website",
   },
 };

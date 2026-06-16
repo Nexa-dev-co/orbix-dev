@@ -30,10 +30,10 @@ function About() {
         A small, fiercely focused studio crafting cinematic, story-driven web experiences — SaaS, commerce, campaigns and mobile-first apps.
       </p>
       <div style={{ display: "flex", gap: "2.5rem", justifyContent: "center", flexWrap: "wrap" }}>
-        {[["Est.", "2026"], ["Missions", "40+"], ["Awards", "12"]].map(([k, v]) => (
-          <div key={k}>
-            <div className="font-display" style={{ fontWeight: 800, fontSize: "2rem" }}>{v}</div>
-            <div className="eyebrow" style={muted}>{k}</div>
+        {[["Est.", "2026"], ["Missions", "40+"], ["Awards", "12"]].map(([label, value]) => (
+          <div key={label}>
+            <div className="font-display" style={{ fontWeight: 800, fontSize: "2rem" }}>{value}</div>
+            <div className="eyebrow" style={muted}>{label}</div>
           </div>
         ))}
       </div>
@@ -44,11 +44,11 @@ function About() {
 function Work() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
-      {WORK.map((w) => (
-        <div key={w.title} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "1.3rem", background: "var(--card)" }}>
-          <div className="font-display" style={{ fontWeight: 700, fontSize: "1.25rem" }}>{w.title}</div>
-          <div style={{ ...muted, marginTop: "0.4rem" }}>{w.category}</div>
-          <div className="eyebrow" style={{ color: "var(--accent)", marginTop: "0.8rem" }}>{w.year}</div>
+      {WORK.map((work) => (
+        <div key={work.title} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "1.3rem", background: "var(--card)" }}>
+          <div className="font-display" style={{ fontWeight: 700, fontSize: "1.25rem" }}>{work.title}</div>
+          <div style={{ ...muted, marginTop: "0.4rem" }}>{work.category}</div>
+          <div className="eyebrow" style={{ color: "var(--accent)", marginTop: "0.8rem" }}>{work.year}</div>
         </div>
       ))}
     </div>
@@ -58,11 +58,11 @@ function Work() {
 function Process() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1.5rem" }}>
-      {PROCESS.map((p) => (
-        <div key={p.n}>
-          <div className="font-display" style={{ color: "var(--accent)", fontWeight: 800, fontSize: "1.6rem" }}>{p.n}</div>
-          <div className="font-display" style={{ fontWeight: 700, fontSize: "1.2rem", margin: "0.3rem 0 0.5rem" }}>{p.title}</div>
-          <p style={muted}>{p.desc}</p>
+      {PROCESS.map((step) => (
+        <div key={step.n}>
+          <div className="font-display" style={{ color: "var(--accent)", fontWeight: 800, fontSize: "1.6rem" }}>{step.n}</div>
+          <div className="font-display" style={{ fontWeight: 700, fontSize: "1.2rem", margin: "0.3rem 0 0.5rem" }}>{step.title}</div>
+          <p style={muted}>{step.desc}</p>
         </div>
       ))}
     </div>
@@ -72,10 +72,10 @@ function Process() {
 function Services() {
   return (
     <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-      {SERVICES.map((s, i) => (
-        <li key={s} className="font-display" style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border)", padding: "0.7rem 0", fontWeight: 600, fontSize: "1.4rem" }}>
-          <span>{s}</span>
-          <span className="eyebrow" style={muted}>{String(i + 1).padStart(2, "0")}</span>
+      {SERVICES.map((service, index) => (
+        <li key={service} className="font-display" style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border)", padding: "0.7rem 0", fontWeight: 600, fontSize: "1.4rem" }}>
+          <span>{service}</span>
+          <span className="eyebrow" style={muted}>{String(index + 1).padStart(2, "0")}</span>
         </li>
       ))}
     </ul>

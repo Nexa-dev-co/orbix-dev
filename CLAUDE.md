@@ -1,400 +1,440 @@
-# CLAUDE.md — Nexa Dev Studio
+# CLAUDE.md
+
+## Project Overview
+
+Project Name: Orbix
+
+Orbix is a premium software company specializing in:
+
+- Custom Web Applications
+- SaaS Platforms
+- Enterprise CRM Systems
+- Mobile Applications
+- AI Solutions
+- Digital Product Design
+
+The name "Orbix" originates from orbital systems, gravitational movement, celestial mechanics, and interconnected ecosystems.
+
+The website is not a marketing page.
+
+The website itself must be a demonstration of Orbix's capabilities.
+
+Every interaction, animation, transition, and visual element should communicate:
+
+- Innovation
+- Technical Excellence
+- Precision Engineering
+- Premium Quality
+- Future Thinking
+
+---
+
+# Primary Objective
+
+The goal of this project is not merely to build a beautiful website.
+
+The goal is to create a website that can realistically compete on Awwwards.
+
+Every design decision, animation, interaction, layout, component, and piece of content must be evaluated against this question:
+
+"Would this feel impressive when compared against recent Awwwards winners?"
+
+If the answer is no:
+
+Do not implement it.
+
+Instead propose something more original, memorable, immersive, or technically impressive.
+
+---
+
+# Creative Principles
+
+## Principle 1: Avoid Generic Agency Design
+
+Never generate:
+
+- Generic hero sections
+- Generic gradient backgrounds
+- Generic floating cards
+- Generic feature grids
+- Generic SaaS landing page layouts
+- Generic Framer-style templates
+- Generic startup aesthetics
+
+If a section resembles a typical agency website:
+
+Reject it.
+
+---
+
+## Principle 2: Create Experiences, Not Pages
+
+Every section should feel like an experience.
+
+Examples:
+
+- Orbital systems reacting to cursor movement
+- Dynamic 3D worlds
+- Interactive storytelling
+- Scroll-driven transformations
+- Immersive scene transitions
+- Cinematic camera movements
+- Environmental effects
+- Particle systems
+- Physics-driven interactions
+
+The website should feel alive.
+
+---
+
+## Principle 3: Motion First
+
+Motion is a core design language.
+
+Every transition should have intention.
+
+Avoid:
+
+- Basic fade-ins
+- Basic slide-ins
+- Generic scroll reveals
+
+Prefer:
+
+- Morphing objects
+- Spatial transitions
+- Depth-based movement
+- Camera travel
+- Object transformation
+- Procedural animation
+
+Motion should communicate meaning.
+
+---
+
+## Principle 4: Use 3D Purposefully
+
+3D should not be decoration.
+
+Every 3D element must support the narrative.
+
+Potential themes:
+
+- Orbiting systems
+- Planetary mechanics
+- Connected ecosystems
+- Data universes
+- Artificial intelligence structures
+- Digital galaxies
+- Abstract technological architectures
+
+3D must feel premium and cinematic.
+
+---
+
+## Principle 5: Design for Emotional Impact
+
+Users should experience:
+
+1. Curiosity
+2. Wonder
+3. Engagement
+4. Trust
+5. Excitement
+
+The site should create moments that users want to share.
+
+---
+
+# Awwwards Evaluation Framework
+
+Before implementing any feature, score it from 1-10 in the following categories:
+
+## Creativity
+
+Is it original?
+
+## Innovation
+
+Have users seen this before?
+
+## Interaction
+
+Does it create engagement?
+
+## Visual Design
+
+Does it look premium?
+
+## Motion
+
+Does animation elevate the experience?
+
+## Technical Excellence
+
+Does it demonstrate advanced engineering?
+
+## Memorability
+
+Will users remember it tomorrow?
+
+Any concept scoring below 8 in any category should be redesigned.
+
+---
+
+# Orbix Brand Personality
+
+Orbix is:
+
+- Visionary
+- Intelligent
+- Precise
+- Premium
+- Futuristic
+- Confident
+
+Orbix is not:
+
+- Corporate
+- Boring
+- Generic
+- Minimal for the sake of minimalism
+- Trend-following
+
+Orbix should feel like a company that builds the future.
+
+---
+
+# Technical Standards
+
+Framework:
+
+- Next.js
+- TypeScript
+
+Preferred Technologies:
+
+- React Three Fiber
+- Three.js
+- GSAP
+- Framer Motion
+- Lenis
+- Motion Path Animations
+- WebGL
+- GLSL Shaders
+- Custom Post Processing
+
+Avoid unnecessary dependencies.
+
+Favor custom implementations over generic libraries when they improve uniqueness.
+
+---
+
+# Content Standards
+
+Never generate generic agency copy.
+
+Avoid phrases such as:
+
+- We build digital solutions
+- We transform businesses
+- We create innovative experiences
+- Your trusted partner
+
+Every headline should feel distinctive and memorable.
+
+Every sentence should reinforce the Orbix universe.
+
+---
+
+# Performance Requirements
+
+Awwwards-level visuals must not sacrifice performance.
+
+Priorities:
+
+1. Smooth 60fps interactions
+2. Fast initial load
+3. Progressive enhancement
+4. Optimized assets
+5. Efficient WebGL rendering
+
+Visual ambition must coexist with engineering excellence.
+
+---
+
+# Decision Rule
+
+Before proposing any feature, section, interaction, animation, or visual concept:
+
+Ask:
+
+1. Is this unique?
+2. Is this memorable?
+3. Is this technically impressive?
+4. Does it strengthen the Orbix identity?
+5. Could this appear on Awwwards?
+
+If not:
+
+Do not proceed.
+
+Create something better.
+
+# CLAUDE.md — orbix
 
 This file defines how code should be written, structured, and named in this codebase. Follow these rules in every suggestion, generation, and edit. This is a **pure frontend** Next.js project — no backend, no API routes, no database.
+
+orbix is a cinematic, single-page **web-studio portfolio**: a long-scroll homepage composed of animated sections, gated behind an intro loading screen, plus an isolated **orbital-map navigation prototype** at `/prototype`.
 
 ---
 
 ## Stack
 
-**Framework:** Next.js 15 (App Router), TypeScript, Tailwind CSS
+**Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS
 
-**UI & Components:** shadcn/ui (for base primitives only — modifed heavily to match Nexa design tokens)
+**Animation & graphics:**
 
-**Animation:**
-- `GSAP` + `ScrollTrigger` — scroll-driven reveals, text scramble effects, timeline sequencing
-- `Framer Motion` — component-level transitions, page transitions, layout animations
-- `lottie-web` — loading screen Lottie vector animation
-- `Three.js` — WebGL background canvas and iris reveal shader
-- `Lenis` — smooth inertial scrolling (replaces native scroll)
+- `GSAP` + `ScrollTrigger` (via `@gsap/react`'s `useGSAP`) — scroll-driven reveals, character/text effects, timeline sequencing
+- `Lenis` — smooth inertial scrolling, driven from the GSAP ticker so ScrollTrigger stays in sync
+- `Three.js` — WebGL scenes (hero canvas, work-card canvas, the 3D orbital-map prototype)
+- `ogl` — lightweight WebGL for shader-based effects (e.g. `ShaderTransition`)
 
-**Forms:** React Hook Form + Zod (contact page only)
+**Icons:** `lucide-react`
 
-**Font Loading:** `next/font` with `display: swap`
+**Dev tooling:** `lil-gui` — runtime tweak panels while tuning shaders/scenes (never shipped in a visible/default-on state)
+
+There is **no** shadcn/ui, Framer Motion, form library, or validation library in this project. Don't introduce one without being asked.
 
 ---
 
-## Design System — Nexa Tokens
+## Design System — Tokens
 
-These are the canonical design tokens. Use them everywhere via CSS variables. **Never hardcode a color.**
+These are the canonical design tokens, defined as CSS variables in `app/globals.css` and exposed to Tailwind via `tailwind.config.ts`. Use them everywhere. **Never hardcode a color.**
 
-### Color Palette
+### Colors
 
 ```css
 :root {
-  /* Backgrounds */
-  --color-bg:           #080808;   /* near-black, warmer than pure black */
-  --color-surface:      #0f0f0f;   /* cards, overlays */
-  --color-surface-mid:  #161616;   /* elevated surfaces */
-
-  /* Text */
-  --color-text:         #e8e8e0;   /* off-white, warm tint */
-  --color-text-muted:   #6b6b6b;   /* secondary/metadata text */
-  --color-text-faint:   #2e2e2e;   /* dividers, ghost text */
-
-  /* Accent — electric cyan (Nexa's signature) */
-  --color-accent:       #00e5ff;   /* primary CTA, highlights */
-  --color-accent-dim:   #00b8cc;   /* hover state of accent */
-  --color-accent-glow:  rgba(0, 229, 255, 0.15); /* glow halos */
-
-  /* Borders */
-  --color-border:       rgba(255, 255, 255, 0.07);
-  --color-border-hover: rgba(255, 255, 255, 0.15);
-
-  /* Loading screen specific */
-  --color-loading-bg:   #000000;
-  --color-logo-stroke:  #c8c8c8;
+  --bg: #060606; /* page background — near-black */
+  --fg: #ebe8e0; /* foreground text — warm off-white */
+  --muted: rgba(235, 232, 224, 0.38); /* secondary / metadata text */
+  --accent: #00e5ff; /* signature electric cyan — CTAs, highlights, selection */
+  --border: rgba(235, 232, 224, 0.08); /* hairline dividers, card borders */
+  --card: #0d0d0d; /* elevated surfaces / cards */
 }
 ```
+
+Tailwind exposes these as `bg-bg`, `text-fg`, `text-muted`, `bg-accent`, `border-border`, `bg-card`, etc. (see `tailwind.config.ts`). Prefer the Tailwind token classes over raw `var(--…)` in JSX, and use `var(--…)` directly in CSS / inline canvas styles.
 
 ### Typography
 
+Two fonts, loaded via `next/font/google` in `app/layout.tsx` with `display: "swap"`:
+
 ```css
-/* Fonts loaded via next/font */
-
-/* Display / Headings — sharp, geometric */
---font-display: 'Syne', sans-serif;
-
-/* Body — clean, readable */
---font-body: 'DM Sans', sans-serif;
-
-/* Mono — code, labels, loading text */
---font-mono: 'JetBrains Mono', monospace;
+--font-syne     /* Syne   — display / headings (weights 700, 800) */
+--font-dm-sans  /* DM Sans — body / UI         (weights 300, 400, 500) */
 ```
 
 **Usage rules:**
-- `--font-display` → all `h1`–`h3`, hero text, section titles
-- `--font-body` → paragraphs, nav links, button labels
-- `--font-mono` → loading tagline, code blocks, small metadata labels, badge text
 
-### Spacing & Motion Tokens
-
-```css
-:root {
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-expo:  cubic-bezier(0.7, 0, 0.84, 0);
-  --ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
-
-  --duration-fast:   200ms;
-  --duration-base:   400ms;
-  --duration-slow:   800ms;
-  --duration-cinematic: 1400ms;
-}
-```
+- Display (Syne) → headings, hero text, section titles. Apply via the `font-display` Tailwind class or the `.font-display` helper.
+- Body (DM Sans) → paragraphs, nav, labels. This is the `<body>` default.
+- `.eyebrow` helper → small uppercased, letter-spaced kicker labels above headings.
 
 ---
 
-## Loading Animation — Full Specification
+## Loading Screen — Variant System
 
-This is a first-class feature of the site. Follow the implementation below exactly.
+Every load of the site is gated behind a fullscreen intro loader. This is orchestrated by `components/effects/PageLoader.tsx`, which:
 
-### Visual Sequence
+1. Paints an opaque `--bg` cover panel on the first frame / during SSR so there's no content flash.
+2. Resolves **which** loader variant to play, then mounts it.
+3. Unmounts once the active loader calls `onComplete`.
 
-| Phase | What Happens | Timing |
-|---|---|---|
-| 1 | Black screen appears, Lottie fades in | 0ms → 200ms |
-| 2 | Nexa "N" SVG logo stroked outline fades in on top | 600ms |
-| 3 | Tagline fades in at bottom | 1200ms |
-| 4 | Once page hydrated → iris WebGL reveal begins | on `load` + 2500ms min |
-| 5 | Overlay dismissed, main content transitions in | after reveal |
+There are several interchangeable loader variants under `components/loaders/`, each implementing the shared `LoaderProps` contract (`{ onComplete: () => void }`) and each responsible for honouring `prefers-reduced-motion` (resolve fast / skip the animation):
 
-### Nexa-Specific Tweaks vs alche.studio
+| Key        | Component           | Idea                                     |
+| ---------- | ------------------- | ---------------------------------------- |
+| `orbital`  | `OrbitalTypeLoader` | orbiting type forms into the wordmark    |
+| `kinetic`  | `KineticLoader`     | kinetic typography (current **default**) |
+| `counter`  | `CounterLoader`     | percentage / counter count-up            |
+| `words`    | `WordRevealLoader`  | sequential word reveal                   |
+| `curtain`  | `CurtainLoader`     | panel/curtain wipe reveal                |
+| `stroke`   | `StrokeLoader`      | SVG stroke-draw                          |
+| `scramble` | `ScrambleLoader`    | text-scramble settle                     |
 
-- **No Lottie at first** — The loading screen opens with just the black background and a subtle **animated noise/grain texture** (CSS or a tiny canvas shader) for the first 200ms before Lottie appears. Feels more intentional.
-- **Logo stroke color:** `#c8c8c8` (slightly cooler than alche's `#bbb`)
-- **Tagline text:** *"We build digital products that perform."* — `JetBrains Mono`, `0.65vmax`, `font-weight: 300`
-- **Iris reveal tint:** As the iris expands, a faint **cyan glow pulse** (`rgba(0, 229, 255, 0.08)`) emanates from the center before the scene fully reveals — achieved by a secondary uniform `uAccentPulse` in the shader
-- **Edge mask gradient:** Slightly tighter: `transparent 0%, black 8%, black 92%, transparent 100%`
-- **Minimum display time:** 2800ms (longer than alche's 2500ms — the animation deserves full attention)
-
-### HTML Structure (as a Next.js component)
-
-```tsx
-// components/loading/LoadingOverlay.tsx
-// This is a Client Component rendered in the root layout, above everything else.
-```
-
-### Component File
+The registry, stable order, and default live in `components/loaders/index.ts` (`LOADERS`, `LOADER_ORDER`, `DEFAULT_LOADER`). Pick a variant without code changes via the URL:
 
 ```
-components/
-  loading/
-    LoadingOverlay.tsx     # full overlay — Lottie, logo, tagline, canvas for iris
-    LoadingOverlay.css     # scoped styles (not Tailwind — pixel-specific positioning)
-    iris-shader.ts         # GLSL strings + Three.js iris reveal logic
-    grain-overlay.ts       # subtle animated noise canvas utility
+?loader=orbital | kinetic | counter | words | curtain | stroke | scramble
+?loader=1..7     (by position in LOADER_ORDER)
+?loader=random   (random each load)
 ```
 
-### CSS (LoadingOverlay.css)
-
-```css
-.loading-container {
-  position: fixed;
-  inset: 0;
-  height: 100lvh;
-  z-index: 9999;
-  background-color: var(--color-loading-bg);
-  pointer-events: auto;
-}
-
-.loading-container[data-hidden] {
-  pointer-events: none;
-}
-
-.loading-lottie-container {
-  position: absolute;
-  inset: 0;
-  width: 80%;
-  left: 50%;
-  transform: translateX(-50%);
-  mask: linear-gradient(
-    to right,
-    transparent 0%,
-    black 8%,
-    black 92%,
-    transparent 100%
-  );
-  -webkit-mask: linear-gradient(
-    to right,
-    transparent 0%,
-    black 8%,
-    black 92%,
-    transparent 100%
-  );
-}
-
-.loading-lottie {
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  transition: opacity 0.8s ease;
-}
-
-.loading-logo {
-  opacity: 0;
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 1s ease;
-}
-
-.loading-logo svg path {
-  stroke: var(--color-logo-stroke);
-  fill: none;
-}
-
-.loading-text {
-  opacity: 0;
-  position: absolute;
-  bottom: max(10px, 50% - 14vmax);
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: var(--color-text);
-  font-size: 0.65vmax;
-  font-weight: 300;
-  line-height: 1.4;
-  text-align: center;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 11;
-  font-family: var(--font-mono);
-  transition: opacity 0.5s;
-  letter-spacing: 0.08em;
-}
-
-/* Iris reveal canvas — sits on top of overlay, driven by Three.js */
-.loading-iris-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 20;
-}
-
-/* Grain overlay */
-.loading-grain {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  opacity: 0.04;
-  pointer-events: none;
-}
-```
-
-### Iris Reveal Shader (GLSL)
-
-```glsl
-// iris-shader.ts — finalCompositeFrag
-// uLoaded: 0.0 → 1.0 (driven by JS animation)
-// uAccentPulse: 0.0 → 1.0 (peaks at ~uLoaded 0.3, then fades)
-
-uniform float uLoaded;
-uniform float uAccentPulse;
-uniform sampler2D uScene;
-uniform vec2 uResolution;
-varying vec2 vUv;
-
-#define PI 3.14159265358979
-
-void main() {
-  vec2 uv = vUv;
-  vec2 cuv = uv - 0.5;
-  cuv.x *= uResolution.x / uResolution.y; // correct aspect
-
-  float dist = length(cuv);
-
-  // Radial iris mask — expands as uLoaded increases
-  float r = smoothstep(0.0, 0.2 + uLoaded * 0.7, -dist + uLoaded * 1.4);
-
-  // Zoom: scene starts at 55% zoom, ends at 100%
-  vec2 sceneUv = uv - 0.5;
-  sceneUv *= (0.45 + uLoaded * 0.55);
-  sceneUv += 0.5;
-
-  // Barrel distortion during reveal
-  sceneUv -= sin(r * PI) * normalize(cuv) * 0.08;
-
-  vec4 sceneColor = texture2D(uScene, sceneUv);
-
-  // Cyan accent pulse from center — Nexa addition
-  float pulse = uAccentPulse * (1.0 - dist * 2.0);
-  pulse = max(0.0, pulse);
-  vec3 accentColor = vec3(0.0, 0.898, 1.0); // #00e5ff
-  sceneColor.rgb += accentColor * pulse * 0.12;
-
-  gl_FragColor = mix(vec4(0.0, 0.0, 0.0, 1.0), sceneColor, r);
-}
-```
-
-### Animation Sequence (TypeScript)
-
-```ts
-// Inside LoadingOverlay.tsx — useEffect on mount
-
-// Phase 1 — Grain already visible (CSS), Lottie fades in
-setTimeout(() => { lottieEl.style.opacity = '1'; }, 200);
-
-// Phase 2 — Logo stroked SVG fades in
-setTimeout(() => { logoEl.style.opacity = '1'; }, 600);
-
-// Phase 3 — Tagline fades in
-setTimeout(() => { textEl.style.opacity = '1'; }, 1200);
-
-// Phase 4 — On window load + minimum 2800ms, iris reveal begins
-// uLoaded animated from 0 → 1 over 1600ms via GSAP
-// uAccentPulse peaks at 0.3 then falls — GSAP timeline
-
-// Phase 5 — overlay[data-hidden] set, body[data-loaded=true] triggers
-// header, nav, and hero entrance via CSS transitions
-```
+When adding a loader: create `components/loaders/<Name>Loader/<Name>Loader.tsx` implementing `LoaderProps`, then register it in `index.ts` (add to `LOADERS`, `LOADER_ORDER`, and the `LoaderKey` union). Keep variant-specific constants named at the top of the file, never inline.
 
 ---
 
 ## Project Structure
 
+Single homepage; sections are imported and composed **directly** in `app/page.tsx` — there is **no `View` wrapper component** between a page and its sections.
+
 ```
 app/
-  layout.tsx             # root layout — fonts, LoadingOverlay, Lenis init, global CSS
-  page.tsx               # homepage shell → <HomeView />
-  about/
-    page.tsx             # → <AboutView />
-  services/
-    page.tsx             # → <ServicesView />
-  contact/
-    page.tsx             # → <ContactView />
+  layout.tsx          # root layout — fonts, PageLoader, CustomCursor, SmoothScroll, Grain, global CSS
+  globals.css         # design tokens + base/typography/cursor/marquee/transition CSS
+  page.tsx            # homepage — composes the sections directly
+  prototype/
+    page.tsx          # /prototype — orbital-map nav prototype (3D default, ?view=2d fallback)
 
 components/
-  loading/
-    LoadingOverlay.tsx
-    LoadingOverlay.css
-    iris-shader.ts
-    grain-overlay.ts
-  layout/
-    Header.tsx           # nav — hidden until data-loaded=true on body
-    Footer.tsx
-    SmoothScroller.tsx   # Lenis wrapper (Client Component)
-  home/
-    HomeView.tsx
-    HeroSection.tsx      # Three.js canvas background + headline
-    ServicesPreview.tsx
-    StatsBar.tsx
-    CtaSection.tsx
-  about/
-    AboutView.tsx
-    TeamSection.tsx
-    ValuesSection.tsx
-    TimelineSection.tsx
-  services/
-    ServicesView.tsx
-    ServiceCard.tsx
-    ServicesList.tsx
-  contact/
-    ContactView.tsx
-    ContactForm.tsx      # React Hook Form + Zod
-  ui/                    # shadcn/ui primitives (heavily restyled)
-    button.tsx
-    input.tsx
-    textarea.tsx
+  layout/             # Navbar, Footer
+  sections/           # homepage sections — Hero, Marquee, Statement, WorkGrid, Process, CtaBanner
+  effects/            # PageLoader, SmoothScroll, CustomCursor, Grain, ShaderTransition
+  canvas/             # Three.js canvases — HeroCanvas, WorkCardCanvas
+  loaders/            # intro loader variants + index.ts (registry) + types.ts (LoaderProps)
+  ui/                 # small reusable primitives — MagneticButton, SectionDivider
+  prototype/          # orbital-map prototype (kept isolated from the live site)
+    OrbitMap          # 2D SVG version
+    orbit/            # 3D WebGL version — scene, config, sections, journey, shaders, HUD, panel
 
 lib/
-  three-setup.ts         # Three.js renderer, scene, camera bootstrap
-  lenis.ts               # Lenis singleton
-  gsap-config.ts         # GSAP + ScrollTrigger registration
-
-hooks/
-  useIriReveal.ts        # WebGL iris reveal lifecycle
-  useScrollReveal.ts     # GSAP ScrollTrigger text/element reveals
-  useTextScramble.ts     # GSAP text scramble effect
-
-types/
-  contact.ts             # ContactFormValues, Zod inferred types
+  hooks/
+    useGsap.ts        # scoped GSAP runner (useGSAP) + prefersReducedMotion helper
+    useLenis.ts       # single Lenis instance, driven from the GSAP ticker
+  splitChars.tsx      # SplitChars — wraps each glyph in <span class="char"> for per-letter animation
 
 public/
-  loading/
-    data.json            # Lottie animation file
-  fonts/                 # self-hosted fallbacks if next/font fails
+  textures/           # image assets (e.g. planet textures for the prototype)
 ```
+
+### Component file convention
+
+- **Each component lives in its own folder named after it**, containing its `.tsx` (and any co-located files it owns — CSS, sub-parts, local config). For example `components/sections/Hero/Hero.tsx`, not a loose `components/sections/Hero.tsx`.
+- The category folders (`layout`, `sections`, `effects`, `canvas`, `loaders`, `ui`, `prototype`) stay as grouping; the per-component folder sits inside its category.
+- Co-locate everything a component owns with it; only promote something to `lib/` when it's shared across components.
 
 ---
 
 ## Page-by-Page Notes
 
-### Landing Page (`/`)
-- Full-viewport hero with **Three.js WebGL background** — abstract particle mesh or flowing geometry in Nexa cyan on dark
-- Headline uses `--font-display`, large, with GSAP text scramble on load
-- Scroll-triggered section reveals via `useScrollReveal`
-- Services preview grid, stats bar, CTA
+### Homepage (`/`)
 
-### Services (`/services`)
-- Full list of services in a bento-style grid
-- Each `ServiceCard` has a hover effect — border lights up in `--color-accent`, subtle glow halo
-- No modals — each card is self-contained
+Long-scroll composition rendered by `app/page.tsx`, in order:
+`ShaderTransition` → `Navbar` → `Hero` → `Marquee` → `Statement` → `WorkGrid` → `Process` → `CtaBanner` → `Footer`, with `SectionDivider` between sections.
 
-### About (`/about`)
-- Team section, company values, founding timeline
-- Timeline uses GSAP ScrollTrigger for line-draw animation
+- `Hero` uses a Three.js WebGL canvas background + headline with per-character GSAP reveal (`SplitChars`).
+- `Marquee` is a pure-CSS infinite scroll (see `.marquee` in `globals.css`), pausing on hover.
+- Section reveals use GSAP `ScrollTrigger` via the scoped `useGsap` hook.
 
-### Contact (`/contact`)
-- Simple form: Name, Email, Company, Message
-- React Hook Form + Zod validation
-- No backend — `mailto:` fallback or Formspree endpoint
-- Form fields styled with `--color-border` + focus glow in `--color-accent`
+### Prototype (`/prototype`)
+
+An orbital-map navigation concept, **isolated from the live site**.
+
+- Default is the **3D** WebGL map (`components/prototype/orbit`), loaded via `next/dynamic` with `ssr: false` so `three` stays out of the server graph.
+- `?view=2d` renders the 2D SVG alternative (`components/prototype/OrbitMap`).
+- Don't let prototype code leak into the homepage bundle.
 
 ---
 
@@ -418,41 +458,30 @@ const handleSubmit = (event: Event) => {};
 
 ### Files
 
-File names must describe what the file **does or contains**.
-
-```
-// ❌
-utils.ts / helpers.ts / misc.ts
-
-// ✅
-format-date.ts / parse-form-values.ts / calculate-read-time.ts
-```
+- **`.tsx` files → PascalCase**, named after what they render: `Hero.tsx`, `WorkGrid.tsx`, `MagneticButton.tsx`, `OrbitalTypeLoader.tsx`. A `.tsx` file that exports a component is named after that component (e.g. a file exporting `SplitChars` is `SplitChars.tsx`).
+- **`.ts` files** keep their idiomatic casing:
+  - **hooks** → `camelCase`, verb-first: `useGsap.ts`, `useLenis.ts`.
+  - **utilities / config / data** → `camelCase`, describing what the file does or contains: `formatDate.ts`, `parseFormValues.ts` — never `utils.ts` / `helpers.ts` / `misc.ts`.
 
 ### Hooks
 
 Verb-first, action-describing names:
 
 ```ts
-useIrisReveal()      // WebGL iris animation lifecycle
-useScrollReveal()    // GSAP scroll-triggered reveals
-useTextScramble()    // text scramble effect
-useContactForm()     // form state + submission
+useGsap(); // scoped GSAP runner + prefers-reduced-motion gate
+useLenis(); // Lenis smooth-scroll lifecycle, synced to the GSAP ticker
 ```
 
 ### Components
 
-PascalCase, named after what they render:
-
-```
-HeroSection.tsx / ServiceCard.tsx / ContactForm.tsx / LoadingOverlay.tsx
-```
+PascalCase, named after what they render: `Hero` / `MagneticButton` / `PageLoader` / `SectionDivider`.
 
 ---
 
 ## Exports
 
 - **Pages & components** → `default export`
-- **Utils, hooks, lib, types** → `named export`
+- **Hooks, utils, lib, types, registries** → `named export`
 - **Next.js `page.tsx` and `layout.tsx`** → always `default export` (required)
 
 ---
@@ -462,17 +491,18 @@ HeroSection.tsx / ServiceCard.tsx / ContactForm.tsx / LoadingOverlay.tsx
 Every animation must feel **purposeful and cinematic**, not decorative.
 
 Rules:
-1. **The loading sequence is sacred.** Never skip it or simplify it during development. Use a `?skip_loading=1` query param to bypass if needed, not code changes.
-2. **Scroll reveals use GSAP ScrollTrigger**, not Intersection Observer manually — keeps animation logic centralized.
-3. **Framer Motion** is for component-level transitions (route changes, card hovers, modal entrances). Don't mix with GSAP for the same element.
-4. **Lenis** wraps the entire scroll. Always use `lenis.on('scroll', ScrollTrigger.update)` to keep them in sync.
-5. **Three.js canvas** renders behind everything at `z-index: 0`. Never block scroll or pointer events.
-6. Animations respect `prefers-reduced-motion` — wrap all non-essential motion in a check:
+
+1. **The intro loader gates the site.** Don't bypass it with code edits; compare variants with the `?loader=` URL param.
+2. **Scroll reveals use GSAP `ScrollTrigger`** via the scoped `useGsap` hook — not hand-rolled Intersection Observers. This keeps animation logic centralized and auto-cleaned on unmount.
+3. **Lenis wraps the entire scroll.** It's initialised once (`useLenis`) and driven from the GSAP ticker; ScrollTrigger updates on its `scroll` event. Don't spin up a second scroll loop.
+4. **WebGL canvases render behind content.** Never block scroll or pointer events.
+5. Animations respect `prefers-reduced-motion`. Use the shared helper — `useGsap`'s scoped runner already bails out when reduced motion is requested, and `useLenis` falls back to native scroll:
 
 ```ts
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-if (!prefersReducedMotion) {
-  // run GSAP / Three.js / Lottie animations
+import { prefersReducedMotion } from "@/lib/hooks/useGsap";
+
+if (!prefersReducedMotion()) {
+  // run decorative GSAP / WebGL motion
 }
 ```
 
@@ -484,50 +514,39 @@ Comments explain **why**, not what.
 
 ```ts
 // ❌ Obvious
-// Fade in the logo
-logoEl.style.opacity = '1';
+// Brighten the particle
+brightness *= 1.5;
 
-// ✅ Explains why this timing
-// Logo fades in at 600ms, not immediately — we let the Lottie establish
-// visual context first so the logo reveal feels like a discovery, not a splash screen
-logoEl.style.opacity = '1';
+// ✅ Explains why
+// Particles brighten as they lock in so the formed shape "pops" — this is what
+// makes the reveal read as building, not just arriving
+brightness *= 1.0 + gatherRaw * FORM_BRIGHTNESS_BOOST;
 ```
 
-For multi-step complex functions (especially animation sequences), number the steps:
+For multi-step complex functions (especially animation timelines), number the steps:
 
 ```ts
-// 1. Wait for Lottie to establish before revealing logo
-// 2. Tagline comes last — it's the emotional beat, needs breathing room
-// 3. Iris reveal only fires after real assets loaded AND min display time met
-//    — avoids a flash if the user's machine is fast
+// 1. Intro — elements fade in / settle (anticipation)
+// 2. Build — staggered reveal ramps in
+// 3. Resolve — final polish, then hand off / reveal the site
 ```
 
 ---
 
 ## TypeScript
 
-- Prefer `interface` for object shapes, `type` for unions and computed types
+- Prefer `interface` for object shapes, `type` for unions and computed types.
 - No `any`. Use `unknown` and narrow it.
-- Zod schemas are source of truth — infer TS types from them:
-
-```ts
-export const contactFormSchema = z.object({
-  fullName:    z.string().min(2),
-  email:       z.string().email(),
-  companyName: z.string().optional(),
-  message:     z.string().min(10),
-});
-
-export type ContactFormValues = z.infer<typeof contactFormSchema>;
-```
+- Type shared contracts explicitly and export them (e.g. `LoaderProps` in `components/loaders/types.ts`); derive registry key unions from them (`LoaderKey`).
+- Generic hooks should be parameterised over the element type where it helps callers (e.g. `useGsap<HTMLElement>()`).
 
 ---
 
 ## General Rules
 
-- No magic numbers. Named constants only.
+- No magic numbers. Named constants only — declare them at the top of the file, never inline.
 - No commented-out code left in commits.
-- Env variables (e.g. Formspree endpoint) accessed through a typed `env.ts` wrapper, never `process.env.X` inline.
 - Import order: external packages → internal aliases (`@/`) → relative imports.
-- `'use client'` only where strictly necessary. Prefer Server Components for static sections; Client Components for animation-heavy or interactive sections.
-- Three.js and Lottie imports are **dynamic** (`next/dynamic` with `ssr: false`) — they cannot run on the server.
+- `'use client'` only where strictly necessary. Prefer Server Components for static markup; Client Components for animation-heavy or interactive sections.
+- Three.js / WebGL imports are **dynamic** (`next/dynamic` with `ssr: false`) when they'd otherwise enter the server graph — they can't run on the server.
+- Keep prototype code (`components/prototype/`, `/prototype`) isolated from the live homepage bundle.

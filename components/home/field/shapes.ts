@@ -4,6 +4,7 @@ import {
   GAP,
   PLANET_HOVER_X,
   PLANET_LABEL,
+  PLANET_LANE,
   SHAPE_FRACTION,
   SHAPE_W,
   WORDMARK_LIFT,
@@ -58,8 +59,9 @@ export async function buildTargets(
     makeTexture(simSize, core, -GAP * 4),
   ];
 
-  // One fully-formed planet per project, each carrying its name as a particle
-  // label. The name raster is async (waits on the font), so build them together.
+  // One fully-formed planet per project, each with its own signature feature and
+  // its name spelled in particles floating above the sphere (accent-tinted at
+  // render). The name raster is async (waits on the font), so build them first.
   const names = await Promise.all(PLANETS.map((project) => rasterText(project.title)));
   const planets = [
     planetVariant(5.8, "ring", names[0]),
@@ -141,8 +143,8 @@ interface NameRaster {
 
 /**
  * Rasterize a project name to a normalized point cloud. Same technique as the
- * wordmark, but the result is recentred and scaled to a unit height so any name
- * can be dropped onto a planet of any radius without distortion.
+ * wordmark, but recentred and scaled to unit height so any name can be dropped
+ * above a planet of any radius without distortion.
  */
 async function rasterText(text: string): Promise<NameRaster> {
   const canvas = document.createElement("canvas");
@@ -226,21 +228,18 @@ function orbitsFormation(): Formation {
  * one read as its own planet rather than a bare sphere.
  */
 function planetLane(): Formation {
-  const radii = [3.3, 2.6, 3.7, 2.4];
-  const xs = [-18, -6, 6, 18];
-  const ys = [2, -1, 1, -2];
-  const zs = [0, 4.5, -4.5, 2];
+  const { radii, xs, ys, zs } = PLANET_LANE;
   const tilts = [0.5, -0.42, 0.6, -0.5];
-  const ringShare = 0.32; // fraction of each planet's particles forming its ring
-  const ringRadius = 1.7; // ring radius as a multiple of the planet radius
-  const ringFlatten = 0.3; // squash so the ring reads as an ellipse, not a halo
+  const ringShare = 0.3; // fraction of each planet's particles forming its ring
+  const ringRadius = 1.65; // ring radius as a multiple of the planet radius
   return (i, _n, out) => {
-    const p = i % 4;
+    const p = i % 4; // matches the per-particle aPlanet attribute used for shading
     const radius = radii[p];
     if (Math.random() < ringShare) {
+      // a crisp tilted ring in the planet's local XZ plane (thin in Y)
       const t = Math.random() * Math.PI * 2;
       const r = radius * ringRadius;
-      out.set(Math.cos(t) * r, Math.sin(t) * r * ringFlatten, rnd(0.4));
+      out.set(Math.cos(t) * r, rnd(0.18), Math.sin(t) * r);
       out.applyAxisAngle(X_AXIS, tilts[p]);
     } else {
       spherePoint(radius, out);
@@ -252,51 +251,58 @@ function planetLane(): Formation {
 }
 
 /**
- * One fully-formed world per project: a dense shell, the project's signature
- * feature, and the project name spelled in particles floating in front of it
- * (the first PLANET_LABEL.band of slots; tinted accent at render). Shown while
- * its row is hovered, when the whole field gathers into this single planet.
+ * One fully-formed world per project: the project name spelled in particles
+ * floating above the sphere, a dense surface shell, and the project's signature
+ * feature. Shown while its row is hovered, when the whole field gathers into this
+ * single planet. The renderer shades the body as a lit sphere and tints the name
+ * particles accent (FieldScene aLabel / uPlanetCenter).
  */
 function planetVariant(
   radius: number,
   feature: "ring" | "moons" | "double-ring" | "halo",
   name: NameRaster,
 ): Formation {
-  // Size the name to the planet: full height, but shrink long names to fit width.
-  let labelHeight = radius * PLANET_LABEL.height;
+  // Size the name to the planet (full height, shrunk if a long name overflows),
+  // and park it just above the sphere's top so it reads over dark space.
+  let nameHeight = radius * PLANET_LABEL.height;
   const maxWidth = radius * PLANET_LABEL.maxWidth;
-  if (name.aspect * labelHeight > maxWidth) labelHeight = maxWidth / name.aspect;
-  const labelZ = radius + PLANET_LABEL.front;
+  if (name.aspect * nameHeight > maxWidth) nameHeight = maxWidth / name.aspect;
+  const nameY = radius + PLANET_LABEL.top + nameHeight * 0.5;
+  const nameZ = radius * PLANET_LABEL.front;
 
   return (i, n, out) => {
     if (i < n * PLANET_LABEL.band) {
-      // 1. the project name — a billboard floating just ahead of the sphere
+      // the project name — a particle billboard floating above the sphere
       const k = i % name.nPts;
       out.set(
-        name.pts[k * 2] * labelHeight + rnd(0.12),
-        name.pts[k * 2 + 1] * labelHeight + PLANET_LABEL.y + rnd(0.12),
-        labelZ + rnd(0.4),
+        name.pts[k * 2] * nameHeight + rnd(0.1),
+        name.pts[k * 2 + 1] * nameHeight + nameY + rnd(0.1),
+        nameZ + rnd(0.3),
       );
-    } else if (i < n * 0.86) {
-      // 2. the planet body — a dense surface shell
+    } else if (i < n * 0.85) {
+      // the planet body — a dense surface shell
       spherePoint(radius, out);
     } else if (feature === "ring" || feature === "double-ring") {
-      // 3. the signature feature
+      // a crisp tilted ring (Saturn-like); double-ring adds an outer band
       const r =
-        feature === "double-ring" && i % 2 === 0 ? radius * 1.9 : radius * 1.55;
+        feature === "double-ring" && i % 2 === 0 ? radius * 1.95 : radius * 1.5;
       const t = Math.random() * Math.PI * 2;
-      out.set(Math.cos(t) * r, Math.sin(t) * r * 0.28, rnd(0.4));
-      out.applyAxisAngle(X_AXIS, 0.45);
+      out.set(Math.cos(t) * r, rnd(0.16), Math.sin(t) * r);
+      out.applyAxisAngle(X_AXIS, 0.42);
     } else if (feature === "moons") {
+      // two clean moons, one each side
       const m = i % 2;
-      spherePoint(0.9, out);
-      out.x += m === 0 ? radius + 4.2 : -(radius + 3);
-      out.y += m === 0 ? 2.4 : -3.2;
+      spherePoint(0.85, out);
+      out.x += m === 0 ? radius + 4.2 : -(radius + 3.2);
+      out.y += m === 0 ? 2.6 : -3.0;
     } else {
-      // halo: a sparse shell of debris
-      spherePoint(radius + 2.5 + Math.random() * 3, out);
+      // a crisp wide ring at a steeper tilt (replaces the old debris cloud)
+      const t = Math.random() * Math.PI * 2;
+      const r = radius * 1.7;
+      out.set(Math.cos(t) * r, rnd(0.16), Math.sin(t) * r);
+      out.applyAxisAngle(X_AXIS, 0.85);
     }
-    // Gather the whole planet (body, feature and name) onto the right half.
+    // Gather the whole planet onto the right half (clears the project list).
     out.x += PLANET_HOVER_X;
   };
 }

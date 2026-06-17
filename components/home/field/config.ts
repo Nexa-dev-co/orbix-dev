@@ -143,29 +143,41 @@ export const COLORS = {
  * ambient starfield. Raised to thin that starfield — the surplus goes into the
  * formation, where additive saturation hides it, so the wordmark reads unchanged.
  */
-export const SHAPE_FRACTION = 0.95;
+export const SHAPE_FRACTION = 0.98;
 
 /** Home-pull strength for free (non-formation) particles. */
 export const AMBIENT_PULL = 0.12;
 
 /**
- * Hover planet (planets stop): when a project row is hovered the whole field
- * gathers into that one planet, and a slice of its particles spell the project
- * name as a label floating in front of the sphere (tinted accent at render so it
- * reads over the white planet).
- *   band     — fraction of the planet's particles given to the name
- *   height   — name height as a fraction of the planet radius
- *   maxWidth — cap the name width at this × radius (long names shrink to fit)
- *   front    — world units the name floats ahead of the planet surface
- *   y        — vertical offset of the name from the planet centre
+ * Layout of the four rest-lane planets (the project index). Shared by the
+ * formation (shapes.ts) and the renderer's per-planet sphere shading
+ * (FieldScene → glsl uLaneCenters), so both agree on where each world sits.
  */
-export const PLANET_LABEL = { band: 0.3, height: 0.62, maxWidth: 3.0, front: 2.5, y: 0 };
+export const PLANET_LANE = {
+  radii: [3.3, 2.6, 3.7, 2.4],
+  xs: [-18, -6, 6, 18],
+  ys: [2, -1, 1, -2],
+  zs: [0, 4.5, -4.5, 2],
+};
 
 /**
  * World-x the hovered planet gathers to. Shifting it onto the right half clears
- * the project list on the left, so the planet + name read cleanly over the dark.
+ * the project list on the left, so the planet reads cleanly over the dark.
  */
 export const PLANET_HOVER_X = 15;
+
+/**
+ * Hovered planet's name, spelled in particles floating above the sphere (over
+ * dark space so it reads), tinted accent at render. Sits above the planet rather
+ * than across it — particles over the bright sphere are illegible.
+ *   band     — fraction of the planet's particles given to the name
+ *   height   — name glyph height as a fraction of the planet radius
+ *   maxWidth — cap the name width at this × radius (long names shrink to fit)
+ *   top      — world-units gap between the sphere top and the name block
+ *   front    — name's forward (z) offset as a fraction of radius, so it clears
+ *              the ring and reads in front
+ */
+export const PLANET_LABEL = { band: 0.22, height: 0.5, maxWidth: 2.4, top: 2.0, front: 0.4 };
 
 /** How long the press-and-hold takes to reach full collapse. */
 export const HOLD_RAMP = 1.15;

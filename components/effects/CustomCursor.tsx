@@ -47,7 +47,7 @@ export default function CustomCursor() {
 
     const setLink = (active: boolean) =>
       gsap.to(ring, {
-        scale: active ? 2.5 : 1,
+        scale: active ? 1.5 : 1,
         backgroundColor: active ? "rgba(255,61,31,0.25)" : "rgba(0,0,0,0)",
         borderColor: active ? "rgba(255,61,31,0.6)" : "var(--fg)",
         opacity: active ? 0.9 : 0.3,

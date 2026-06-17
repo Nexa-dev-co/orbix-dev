@@ -3,8 +3,8 @@ import { GPUComputationRenderer, type Variable } from "three/examples/jsm/misc/G
 import { POINT_FRAG, POINT_VERT, POSITION_SHADER, VELOCITY_SHADER } from "./glsl";
 import {
   BRAID_CAM, BRAID_SIM, CAMERA_STOPS, CAM_DIST, COLORS, CORE_MODE, CRYSTAL_CAM, CRYSTAL_SIM,
-  FOV, GAP, PARALLAX, PLANET_LABEL, POINT, SEGMENTS, SHAPE_FRACTION, SHAPE_W, WARP_CAM, WARP_SIM,
-  type CoreTransition,
+  FOV, GAP, PARALLAX, PLANET_HOVER_X, PLANET_LABEL, PLANET_LANE, POINT, SEGMENTS,
+  SHAPE_FRACTION, SHAPE_W, WARP_CAM, WARP_SIM, type CoreTransition,
 } from "./config";
 import type { FieldTargets } from "./shapes";
 
@@ -118,17 +118,24 @@ export class FieldScene {
     /* ── render side: one Points draw ── */
     const count = simSize * simSize;
     const refs = new Float32Array(count * 3);
+    // Per-particle rest-lane planet index (i % 4 for formation particles, −1 for
+    // free drifters) so the shader can light each lane planet around its own
+    // centre. The planet lane formation uses the same i % 4 mapping (shapes.ts).
+    const planetIndex = new Float32Array(count);
     // First `band` of the formation's slots spell the hovered project's name
-    // (see planetVariant); flag them so the shader can tint the label accent.
+    // (see planetVariant); flag them so the shader tints the name accent.
     const labels = new Float32Array(count);
-    const labelCount = Math.floor(count * SHAPE_FRACTION * PLANET_LABEL.band);
+    const shapeCount = Math.floor(count * SHAPE_FRACTION);
+    const labelCount = Math.floor(shapeCount * PLANET_LABEL.band);
     for (let i = 0; i < count; i++) {
       refs[i * 3] = ((i % simSize) + 0.5) / simSize;
       refs[i * 3 + 1] = (Math.floor(i / simSize) + 0.5) / simSize;
+      planetIndex[i] = i < shapeCount ? i % 4 : -1;
       if (i < labelCount) labels[i] = 1;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(refs, 3));
+    geo.setAttribute("aPlanet", new THREE.BufferAttribute(planetIndex, 1));
     geo.setAttribute("aLabel", new THREE.BufferAttribute(labels, 1));
 
     this.pointMat = new THREE.ShaderMaterial({
@@ -147,6 +154,13 @@ export class FieldScene {
         uOpacity: { value: POINT.opacity },
         uHoverMix: { value: 0 },
         uCrystalGlint: { value: 0 },
+        uLaneShade: { value: 0 },
+        uPlanetCenter: { value: new THREE.Vector3(PLANET_HOVER_X, 0, -GAP * 2) },
+        uLaneCenters: {
+          value: PLANET_LANE.xs.map(
+            (x, k) => new THREE.Vector3(x, PLANET_LANE.ys[k], PLANET_LANE.zs[k] - GAP * 2)
+          ),
+        },
       },
     });
     this.points = new THREE.Points(geo, this.pointMat);
@@ -354,8 +368,12 @@ export class FieldScene {
     /* ── draw ── */
     this.pointMat.uniforms.texturePosition.value = this.gpu.getCurrentRenderTarget(this.posVar).texture;
     this.pointMat.uniforms.textureVelocity.value = this.gpu.getCurrentRenderTarget(this.velVar).texture;
-    // Light the name label only while the field is gathered into a hover planet.
+    // Planet lighting: the hovered planet (uHoverMix) and the rest-lane planets
+    // (only while parked near the planets stop and not hovering) read as lit
+    // spheres. The crystal refraction glint rides on the final leg.
     this.pointMat.uniforms.uHoverMix.value = this.hoverMix;
+    this.pointMat.uniforms.uLaneShade.value = Math.max(0, 1 - Math.abs(jp - 2) * 1.8) * (1 - this.hoverMix);
+    this.pointMat.uniforms.uCrystalGlint.value = crystalGlint;
     this.renderer.render(this.scene, this.camera);
   }
 }

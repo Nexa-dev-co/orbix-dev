@@ -176,6 +176,7 @@ export default function FieldHome() {
       <canvas ref={canvas} aria-hidden className="field-canvas" />
       <div className="field-vignette" aria-hidden />
 
+
       {STOPS.map((s, i) => (
         <div
           key={s.nav}

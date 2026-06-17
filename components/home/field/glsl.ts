@@ -253,25 +253,57 @@ uniform sampler2D texturePosition;
 uniform sampler2D textureVelocity;
 uniform float uSize;
 uniform float uPixelRatio;
-attribute float aLabel;
+uniform float uHoverMix;      // shade the hovered planet as a lit sphere
+uniform float uLaneShade;     // shade the four rest-lane planets
+uniform vec3 uPlanetCenter;   // world centre of the hovered planet
+uniform vec3 uLaneCenters[4]; // world centres of the rest-lane planets
+attribute float aPlanet;      // rest-lane planet index 0..3 (−1 = not a planet)
+attribute float aLabel;       // 1 = particle belongs to the hovered project's name
 varying float vSpeed;
 varying float vSeed;
 varying float vDepth;
-varying float vLabel;
+varying float vShade;
+varying float vRim;
 varying float vGlint;
+varying float vLabel;
 
 void main() {
   vec4 p = texture2D(texturePosition, position.xy);
   vec3 v = texture2D(textureVelocity, position.xy).xyz;
   vSpeed = length(v);
   vSeed = p.w;
-  vLabel = aLabel;
   // diagonal coordinate (gem is centred at x=y=0) for the crystal glint sweep
   vGlint = (p.x + p.y) * 0.7;
+  // name particles only read as the label while a planet is hovered
+  vLabel = aLabel * uHoverMix;
+
+  // ── planet lighting: light the sphere so it reads as a lit world, not a fuzzy
+  // orb. normal = direction from the planet centre; lambert + a bright limb. The
+  // name particles stay flat (lit = 0) so they read as a clean accent label. ──
+  vShade = 1.0;
+  vRim = 0.0;
+  vec3 planetCentre = vec3(1.0e6);
+  float planetLit = 0.0;
+  if (uHoverMix > 0.01) {
+    planetCentre = uPlanetCenter;
+    planetLit = aLabel > 0.5 ? 0.0 : uHoverMix;
+  } else if (uLaneShade > 0.01 && aPlanet >= 0.0) {
+    planetCentre = uLaneCenters[int(aPlanet)];
+    planetLit = uLaneShade;
+  }
+  if (planetLit > 0.01) {
+    vec3 lightDir = normalize(vec3(-0.55, 0.6, 0.55));
+    vec3 viewDir = normalize(cameraPosition - p.xyz);
+    vec3 nrm = normalize(p.xyz - planetCentre);
+    float lit = smoothstep(-0.25, 0.9, dot(nrm, lightDir));
+    vShade = mix(1.0, 0.16 + lit * 1.05, planetLit);
+    vRim = pow(1.0 - max(dot(nrm, viewDir), 0.0), 2.5) * planetLit;
+  }
 
   vec4 mv = modelViewMatrix * vec4(p.xyz, 1.0);
   vDepth = -mv.z;
   gl_PointSize = uSize * uPixelRatio * (0.5 + fract(vSeed * 13.7)) * (52.0 / max(vDepth, 1.0));
+  gl_PointSize *= 1.0 + vLabel * 0.4; // name particles a touch larger for legibility
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -280,13 +312,14 @@ export const POINT_FRAG = /* glsl */ `
 uniform vec3 uColor;
 uniform vec3 uAccent;
 uniform float uOpacity;
-uniform float uHoverMix;
 uniform float uCrystalGlint; // 0 inactive · 0→1 sweeps a refraction band across the gem
 varying float vSpeed;
 varying float vSeed;
 varying float vDepth;
-varying float vLabel;
+varying float vShade;
+varying float vRim;
 varying float vGlint;
+varying float vLabel;
 
 void main() {
   float d = length(gl_PointCoord - 0.5);
@@ -296,11 +329,15 @@ void main() {
   float heat = smoothstep(8.0, 40.0, vSpeed) * 0.9 + step(0.992, fract(vSeed * 91.3)) * 0.55;
   vec3 col = mix(uColor, uAccent, min(heat, 1.0));
 
-  // Hover-planet label: the name particles glow accent and brighten so they
-  // read as a label across the white planet behind them.
-  float label = vLabel * uHoverMix;
-  col = mix(col, uAccent, label);
-  alpha *= 1.0 + label * 0.6;
+  // Planet shading: lit/dark sphere + a faint accent atmosphere glow at the limb.
+  col *= vShade;
+  col = mix(col, uAccent, vRim * 0.4);
+  alpha *= 1.0 + vRim * 0.9;
+
+  // Hovered project's name: the label particles glow accent (orange-red) and
+  // brighten so the name reads cleanly over the dark space above the planet.
+  col = mix(col, uAccent, vLabel);
+  alpha *= 1.0 + vLabel * 0.8;
 
   // Crystal refraction glint: as the lattice locks, a bright accent band sweeps
   // diagonally across the facets (uCrystalGlint travels 0→1), fading in and out.

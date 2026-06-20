@@ -9,6 +9,8 @@ import { createFluidSimulation } from '@/components/effects/FluidCursor/fluidSim
 
 const MAX_DEVICE_PIXEL_RATIO = 2;
 const MAX_FRAME_SECONDS = 1 / 60;
+// The cursor never paints over this element, so the hero sun square stays clean.
+const EXCLUDED_ELEMENT_SELECTOR = '.hero-sun-card';
 
 /**
  * Drives the fluid cursor: one WebGL sim renders dark ink + stars to `inkCanvas`,
@@ -114,6 +116,23 @@ export function useFluidCursor(
       if (resizeCanvases()) simulation.resize();
 
       simulation.frame(deltaSeconds, (now - startTime) / 1000);
+
+      // Keep the excluded element (the hero sun square) clean: erase its rect from
+      // the ink before it gets copied into the invert layer, so neither layer
+      // touches it. getBoundingClientRect tracks its scroll-driven scale for free.
+      const excludedElement = document.querySelector(EXCLUDED_ELEMENT_SELECTOR);
+      if (excludedElement) {
+        const bounds = excludedElement.getBoundingClientRect();
+        if (bounds.width > 0 && bounds.height > 0) {
+          const ratio = pixelRatio();
+          simulation.clearRegion(
+            bounds.left * ratio,
+            (window.innerHeight - bounds.bottom) * ratio,
+            bounds.width * ratio,
+            bounds.height * ratio
+          );
+        }
+      }
 
       // Copy the ink silhouette into the invert layer as a solid white mask,
       // keeping only the alpha. With mix-blend-mode: difference this inverts the

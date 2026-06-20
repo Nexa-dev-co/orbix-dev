@@ -74,8 +74,11 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 clamp(24px, 4vw, 56px);
-  z-index: 100;
+  z-index: 9999; /* above the fluid cursor (9000/9001) and the sun card (9500) */
   opacity: 0; /* GSAP drives entrance */
+  /* Definite base background so the bar always has its colour; the nav hook
+     animates the opacity/blur on scroll on top of this. */
+  background: rgba(6, 6, 6, 0.6);
   border-bottom: 1px solid rgba(235, 232, 224, 0.05);
 }
 

@@ -9,7 +9,7 @@ import { useFluidCursor } from '@/lib/hooks/useFluidCursor';
 //   2. ink layer — the dark ink + stars, semi-transparent so the inverted text
 //      shows through it (the backlit-in-dark-water look).
 // Both ignore pointer events and sit above all page content.
-const LAYER_Z_INDEX = 9999;
+const LAYER_Z_INDEX = 9000;
 
 export default function FluidCursor() {
   const inkCanvasRef = useRef<HTMLCanvasElement>(null);

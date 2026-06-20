@@ -72,6 +72,8 @@ export interface FluidSimulation {
   splat(uvX: number, uvY: number, forceX: number, forceY: number, radiusPixels: number): void;
   /** Advance the simulation and render the ink to the canvas. */
   frame(deltaSeconds: number, elapsedSeconds: number): void;
+  /** Erase a rectangle of the rendered canvas (device px, y from the bottom). */
+  clearRegion(deviceX: number, deviceYFromBottom: number, deviceWidth: number, deviceHeight: number): void;
   /** Re-sync framebuffers to the current canvas backing-store size. */
   resize(): void;
   /** Release all GL resources. */
@@ -405,6 +407,22 @@ export function createFluidSimulation(
     frame(deltaSeconds: number, elapsedSeconds: number) {
       step(deltaSeconds);
       render(elapsedSeconds);
+    },
+    clearRegion(deviceX: number, deviceYFromBottom: number, deviceWidth: number, deviceHeight: number) {
+      // Punch a transparent hole in the rendered ink so the cursor never paints
+      // over this region (used to keep the hero sun square clean).
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(
+        Math.round(deviceX),
+        Math.round(deviceYFromBottom),
+        Math.round(deviceWidth),
+        Math.round(deviceHeight)
+      );
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.disable(gl.SCISSOR_TEST);
     },
     resize() {
       initFramebuffers();

@@ -1,17 +1,13 @@
 'use client';
 
 import { useRef } from 'react';
-import dynamic from 'next/dynamic';
 import { useHeroAnimation } from '@/lib/hooks/useHeroAnimation';
 
-const SunCanvas = dynamic(() => import('./SunCanvas'), { ssr: false });
-
 export default function Hero() {
-  const heroSectionRef    = useRef<HTMLElement>(null);
-  const heroCardRef       = useRef<HTMLDivElement>(null);
-  const canvasWrapperRef  = useRef<HTMLDivElement>(null);
+  const heroSectionRef = useRef<HTMLElement>(null);
+  const heroCardRef    = useRef<HTMLDivElement>(null);
 
-  useHeroAnimation({ sectionRef: heroSectionRef, heroCardRef, canvasWrapperRef });
+  useHeroAnimation({ sectionRef: heroSectionRef, heroCardRef });
 
   return (
     <section ref={heroSectionRef} className="hero-section">
@@ -23,40 +19,29 @@ export default function Hero() {
           aria-level={1}
           aria-label="we build worlds"
         >
-          <p className="hero-line-top" data-hero-text style={{ opacity: 0 }}>
-            we build
+          <p className="hero-line-top">
+            <span className="hero-mask"><span className="hero-mask-inner">we build</span></span>
           </p>
 
           <div className="hero-line-bottom">
-            <span className="hero-letter" data-hero-text style={{ opacity: 0 }}>
-              W
+            <span className="hero-mask">
+              <span className="hero-mask-inner hero-letter">W</span>
             </span>
 
-            {/* Sun card — GSAP scroll-drives this to fill the viewport */}
-            <div
-              ref={heroCardRef}
-              className="hero-sun-card"
-              data-hero-card
-              style={{ opacity: 0 }}
-            >
-              <div
-                ref={canvasWrapperRef}
-                style={{ width: '100%', height: '100%', transformOrigin: 'center center' }}
-              >
-                <SunCanvas />
-              </div>
+            {/* Sun square — only the black fill lives here; the sun is the shared
+                HeroSun overlay that lands on top of this slot. */}
+            <div ref={heroCardRef} className="hero-sun-card" data-hero-card>
+              <div className="hero-sun-fill" />
             </div>
 
-            <span className="hero-letter" data-hero-text style={{ opacity: 0 }}>
-              rlds
+            <span className="hero-mask">
+              <span className="hero-mask-inner hero-letter">rlds</span>
             </span>
           </div>
         </div>
       </div>
 
-      <p className="hero-sub" data-hero-text style={{ opacity: 0 }}>
-        software with its own gravity
-      </p>
+      <p className="hero-sub">software with its own gravity</p>
 
     </section>
   );

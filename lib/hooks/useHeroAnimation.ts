@@ -1,42 +1,66 @@
 import { useEffect, type RefObject } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { prefersReducedMotion } from '@/lib/prefersReducedMotion';
+import { REVEAL_EVENT } from '@/components/effects/IntroSequence/introEvents';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const SCROLL_SCRUB    = 1.8;
-const SCROLL_END      = '+=220%';
-const ENTRANCE_DELAY  = 0.45;
-const TEXT_DURATION   = 0.95;
-const TEXT_STAGGER    = 0.11;
-const CARD_DELAY      = 0.7;
-const CARD_DURATION   = 1.05;
+// ── Scroll expansion ───────────────────────────────────────────────────
+const SCROLL_SCRUB = 1.8;
+const SCROLL_END    = '+=220%';
+const SUN_SCROLL_SCALE = 2; // the sun grows to 2× as the black square fills the viewport
+
+// ── Reveal (runs when the intro lands the sun in the square) ───────────
+const TEXT_WIPE_DURATION   = 0.9;
+const TEXT_WIPE_STAGGER    = 0.12;
+const SQUARE_FILL_DURATION = 1.1; // the "cup filling with water" rise
+const SUB_FADE_DURATION    = 0.6;
+const FILL_START           = 0.25; // begins just after the headline starts rising
+const FULL_CLIP  = 'inset(0% 0 0 0)';
+const EMPTY_CLIP = 'inset(100% 0 0 0)';
+// If the intro never fires its reveal (e.g. it was bypassed), reveal anyway.
+const REVEAL_FALLBACK_MS = 7000;
+
+const SUN_LAYER_SELECTOR = '.hero-sun-layer';
 
 interface HeroAnimationRefs {
-  sectionRef:        RefObject<HTMLElement | null>;
-  heroCardRef:       RefObject<HTMLDivElement | null>;
-  canvasWrapperRef:  RefObject<HTMLDivElement | null>;
+  sectionRef:  RefObject<HTMLElement | null>;
+  heroCardRef: RefObject<HTMLDivElement | null>;
 }
 
 function measureCardLayout(heroCardElement: HTMLDivElement) {
   // Temporarily clear any in-flight GSAP transform so getBoundingClientRect
   // returns the element's natural layout position, not its animated one
-  const existingTransform        = heroCardElement.style.transform;
+  const existingTransform         = heroCardElement.style.transform;
   heroCardElement.style.transform = 'none';
-  const cardBoundingRect         = heroCardElement.getBoundingClientRect();
+  const cardBoundingRect          = heroCardElement.getBoundingClientRect();
   heroCardElement.style.transform = existingTransform;
   return cardBoundingRect;
 }
 
 export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
-  const { sectionRef, heroCardRef, canvasWrapperRef } = heroAnimationRefs;
+  const { sectionRef, heroCardRef } = heroAnimationRefs;
 
   useEffect(() => {
     const heroSection     = sectionRef.current;
     const heroCardElement = heroCardRef.current;
     if (!heroSection || !heroCardElement) return;
 
-    // 1. Measure the card's natural position before any animation runs
+    const textInners = heroSection.querySelectorAll('.hero-mask-inner');
+    const squareFill = heroSection.querySelector('.hero-sun-fill');
+    const subline    = heroSection.querySelector('.hero-sub');
+    const sunLayer   = document.querySelector(SUN_LAYER_SELECTOR);
+
+    // 1. Hide everything the reveal will bring in. The intro veil covers the hero
+    //    while this runs, so there's no flash.
+    gsap.set(textInners, { yPercent: 115 });
+    if (subline) gsap.set(subline, { autoAlpha: 0, y: 12 });
+    if (squareFill) gsap.set(squareFill, { clipPath: EMPTY_CLIP });
+
+    // 2. Scroll — the black square expands to fill the viewport while the sun
+    //    layer translates to centre and grows to 2×. The sun layer only owns its
+    //    outer transform here; the intro owns the inner ".hero-sun-flight".
     const cardBoundingRect  = measureCardLayout(heroCardElement);
     const cardCenterX       = cardBoundingRect.left + cardBoundingRect.width  / 2;
     const cardCenterY       = cardBoundingRect.top  + cardBoundingRect.height / 2;
@@ -47,26 +71,13 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
     const fullscreenScaleX  = document.documentElement.clientWidth / cardBoundingRect.width;
     const fullscreenScaleY  = window.innerHeight / cardBoundingRect.height;
 
-    // 2. Entrance — text and card fade in on load
-    gsap.fromTo(
-      '[data-hero-text]',
-      { opacity: 0, y: 22 },
-      { opacity: 1, y: 0, stagger: TEXT_STAGGER, duration: TEXT_DURATION, delay: ENTRANCE_DELAY, ease: 'power3.out' },
-    );
-    gsap.fromTo(
-      '[data-hero-card]',
-      { opacity: 0, scale: 0.92 },
-      { opacity: 1, scale: 1, duration: CARD_DURATION, delay: CARD_DELAY, ease: 'power3.out' },
-    );
-
-    // 3. Scroll — card expands to fill the viewport while the sun holds at 2×
     const scrollTimeline = gsap.timeline({
       scrollTrigger: {
-        trigger:      heroSection,
-        start:        'top top',
-        end:          SCROLL_END,
-        pin:          true,
-        scrub:        SCROLL_SCRUB,
+        trigger:       heroSection,
+        start:         'top top',
+        end:           SCROLL_END,
+        pin:           true,
+        scrub:         SCROLL_SCRUB,
         anticipatePin: 1,
       },
     });
@@ -77,23 +88,59 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
       scaleX:       fullscreenScaleX,
       scaleY:       fullscreenScaleY,
       borderRadius: 0,
-      zIndex:       50,
       ease:         'power1.inOut',
       duration:     1,
     }, 0);
 
-    // Counter-scale the sun so its visual size grows to exactly 2× while the
-    // card stretches non-uniformly to fill the viewport
-    if (canvasWrapperRef.current) {
-      scrollTimeline.to(canvasWrapperRef.current, {
-        scaleX:   2 / fullscreenScaleX,
-        scaleY:   2 / fullscreenScaleY,
+    if (sunLayer) {
+      scrollTimeline.to(sunLayer, {
+        x:        translateX,
+        y:        translateY,
+        scale:    SUN_SCROLL_SCALE,
         ease:     'power1.inOut',
         duration: 1,
       }, 0);
     }
 
+    // 3. Reveal — fired once, when the intro lands the sun in the square.
+    let hasRevealed = false;
+    const runReveal = () => {
+      if (hasRevealed) return;
+      hasRevealed = true;
+
+      if (prefersReducedMotion()) {
+        gsap.set(textInners, { yPercent: 0 });
+        if (subline) gsap.set(subline, { autoAlpha: 1, y: 0 });
+        if (squareFill) gsap.set(squareFill, { clipPath: FULL_CLIP });
+        return;
+      }
+
+      const revealTimeline = gsap.timeline();
+      // a. headline rises out of its masks
+      revealTimeline.to(textInners, {
+        yPercent: 0,
+        duration: TEXT_WIPE_DURATION,
+        stagger:  TEXT_WIPE_STAGGER,
+        ease:     'power4.out',
+      }, 0);
+      // b. the square pours in like water behind the sun
+      if (squareFill) revealTimeline.to(squareFill, {
+        clipPath: FULL_CLIP,
+        duration: SQUARE_FILL_DURATION,
+        ease:     'power2.inOut',
+      }, FILL_START);
+      // c. tagline settles last
+      if (subline) revealTimeline.to(subline, {
+        autoAlpha: 1, y: 0, duration: SUB_FADE_DURATION, ease: 'power2.out',
+      }, '>-0.3');
+    };
+
+    window.addEventListener(REVEAL_EVENT, runReveal);
+    const fallbackTimeout = window.setTimeout(runReveal, REVEAL_FALLBACK_MS);
+
     return () => {
+      window.removeEventListener(REVEAL_EVENT, runReveal);
+      window.clearTimeout(fallbackTimeout);
       scrollTimeline.scrollTrigger?.kill();
       scrollTimeline.kill();
     };

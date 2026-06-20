@@ -140,8 +140,12 @@ body {
 }
 
 @keyframes orbital-node-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -194,7 +198,7 @@ body {
 }
 
 .nav-link::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: 0;
@@ -238,7 +242,7 @@ body {
 }
 
 .nav-cta::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   border: 1px solid rgba(235, 232, 224, 0.14);
@@ -263,19 +267,47 @@ body {
   border-style: solid;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.22s ease, transform 0.3s ease;
+  transition:
+    opacity 0.22s ease,
+    transform 0.3s ease;
 }
 
-.cta-tl { top: -1px;    left: -1px;  border-width: 1.5px 0 0 1.5px; }
-.cta-tr { top: -1px;    right: -1px; border-width: 1.5px 1.5px 0 0; }
-.cta-bl { bottom: -1px; left: -1px;  border-width: 0 0 1.5px 1.5px; }
-.cta-br { bottom: -1px; right: -1px; border-width: 0 1.5px 1.5px 0; }
+.cta-tl {
+  top: -1px;
+  left: -1px;
+  border-width: 1.5px 0 0 1.5px;
+}
+.cta-tr {
+  top: -1px;
+  right: -1px;
+  border-width: 1.5px 1.5px 0 0;
+}
+.cta-bl {
+  bottom: -1px;
+  left: -1px;
+  border-width: 0 0 1.5px 1.5px;
+}
+.cta-br {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 1.5px 1.5px 0;
+}
 
-.nav-cta:hover .cta-corner          { opacity: 1; }
-.nav-cta:hover .cta-tl              { transform: translate(-2px, -2px); }
-.nav-cta:hover .cta-tr              { transform: translate(2px, -2px); }
-.nav-cta:hover .cta-bl              { transform: translate(-2px, 2px); }
-.nav-cta:hover .cta-br              { transform: translate(2px, 2px); }
+.nav-cta:hover .cta-corner {
+  opacity: 1;
+}
+.nav-cta:hover .cta-tl {
+  transform: translate(-2px, -2px);
+}
+.nav-cta:hover .cta-tr {
+  transform: translate(2px, -2px);
+}
+.nav-cta:hover .cta-bl {
+  transform: translate(-2px, 2px);
+}
+.nav-cta:hover .cta-br {
+  transform: translate(2px, 2px);
+}
 
 /* Scroll progress bar */
 .nav-progress {
@@ -284,7 +316,13 @@ body {
   left: 0;
   height: 1px;
   width: 0%;
-  background: linear-gradient(90deg, transparent, var(--accent) 15%, var(--accent) 85%, transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent) 15%,
+    var(--accent) 85%,
+    transparent
+  );
   pointer-events: none;
   opacity: 0.55;
 }
@@ -295,7 +333,7 @@ body {
 .hero-section {
   width: 100%;
   height: 100vh;
-  background: #E2DFD2;
+  background: #e2dfd2;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -309,9 +347,9 @@ body {
   align-items: center;
   justify-content: center;
   position: relative;
-  /* z-index 5 ensures this stacking context sits above .hero-sub (z-index 2)
+  /* z-index 9003 ensures this stacking context sits above .hero-sub (z-index 9002)
      so the card covers the tagline when it expands to fill the viewport */
-  z-index: 5;
+  z-index: 9003;
 }
 
 /* Title group — column: "we build" stacked above "W[□]rlds" */
@@ -352,7 +390,6 @@ body {
   width: 175px;
   height: 175px;
   flex-shrink: 0;
-  background: #000;
   overflow: hidden;
   position: relative;
   z-index: 20;
@@ -363,11 +400,29 @@ body {
   will-change: transform, border-radius;
 }
 
-/* Three.js canvas fills the square */
+/* The black square itself — "poured in" on reveal via the clip-path rising. */
+.hero-sun-fill {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  clip-path: inset(100% 0 0 0);
+}
+
+/* Three.js canvas fills its layer (the shared HeroSun overlay) */
 .sun-canvas {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* Headline mask-wipe: each line/word rises out of a clipping window on reveal */
+.hero-mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+.hero-mask-inner {
+  display: inline-block;
 }
 
 /* Tagline — sits at the natural bottom of the flex column */
@@ -380,8 +435,21 @@ body {
   color: rgba(12, 12, 12, 0.4);
   padding-bottom: 36px;
   position: relative;
-  z-index: 2;
+  z-index: 9002; /* above the fluid cursor (9000/9001) so neon hover shows through the trail */
   text-align: center;
+  /* hover lights it up like neon */
+  transition:
+    color 0.35s ease,
+    text-shadow 0.35s ease;
+}
+
+.hero-sub:hover {
+  color: var(--accent);
+  text-shadow:
+    0 0 5px rgba(0, 229, 255, 0.9),
+    0 0 14px rgba(0, 229, 255, 0.65),
+    0 0 30px rgba(0, 229, 255, 0.45),
+    0 0 60px rgba(0, 229, 255, 0.3);
 }
 
 /* ─── Reduced motion ─────────────────────────────────────────────── */

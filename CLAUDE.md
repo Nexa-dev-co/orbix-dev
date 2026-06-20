@@ -442,34 +442,55 @@ An orbital-map navigation concept, **isolated from the live site**.
 
 ### Variables & Parameters
 
-**Never use abbreviations.** Names must describe exactly what the value is.
+**Never use abbreviations.** Names must describe exactly what the value is. This applies to every variable, parameter, destructured value, and callback argument without exception.
 
 ```ts
 // ❌ Wrong
 const p = req.params;
 const u = await getUser(id);
 const fn = (e: Event) => {};
+const d = new Date();
+const ref = useRef<HTMLDivElement>(null); // only if "ref" is vague — prefer descriptive names
+const { s, t } = useScroll();
 
 // ✅ Correct
 const routeParams = req.params;
 const currentUser = await getUserById(userId);
 const handleSubmit = (event: Event) => {};
+const createdAt = new Date();
+const heroContainerRef = useRef<HTMLDivElement>(null);
+const { scrollProgress, scrollTarget } = useScroll();
+```
+
+When a parameter is a bag of options or data, name it after what it contains — not a generic shorthand:
+
+```ts
+// ❌
+function animateParticles(p: ParticleConfig) {}
+function buildScene(opts: SceneOptions) {}
+
+// ✅
+function animateParticles(particleConfig: ParticleConfig) {}
+function buildScene(sceneOptions: SceneOptions) {}
 ```
 
 ### Files
 
 - **`.tsx` files → PascalCase**, named after what they render: `Hero.tsx`, `WorkGrid.tsx`, `MagneticButton.tsx`, `OrbitalTypeLoader.tsx`. A `.tsx` file that exports a component is named after that component (e.g. a file exporting `SplitChars` is `SplitChars.tsx`).
 - **`.ts` files** keep their idiomatic casing:
-  - **hooks** → `camelCase`, verb-first: `useGsap.ts`, `useLenis.ts`.
-  - **utilities / config / data** → `camelCase`, describing what the file does or contains: `formatDate.ts`, `parseFormValues.ts` — never `utils.ts` / `helpers.ts` / `misc.ts`.
+  - **hooks** → `camelCase`, verb-first: `useGsap.ts`, `useLenis.ts`, `useScrollVelocity.ts`.
+  - **utilities / config / data** → `camelCase`, describing what the file does or contains: `formatDate.ts`, `parseFormValues.ts`, `calculateOrbitalPosition.ts` — never `utils.ts` / `helpers.ts` / `misc.ts`.
+- File names must describe what the file **does or contains**. If the name alone doesn't tell you what's inside, rename it.
 
 ### Hooks
 
 Verb-first, action-describing names:
 
 ```ts
-useGsap(); // scoped GSAP runner + prefers-reduced-motion gate
-useLenis(); // Lenis smooth-scroll lifecycle, synced to the GSAP ticker
+useGsap();          // scoped GSAP runner + prefers-reduced-motion gate
+useLenis();         // Lenis smooth-scroll lifecycle, synced to the GSAP ticker
+useScrollVelocity() // derives scroll velocity for motion effects
+useCursorPosition() // tracks cursor position for magnetic / parallax effects
 ```
 
 ### Components
@@ -510,26 +531,38 @@ if (!prefersReducedMotion()) {
 
 ## Comments
 
-Comments explain **why**, not what.
+Comments explain **why** something is done or walk through **steps in complex logic**. They should read like a human wrote them — not like generated documentation or a narration of obvious code.
 
 ```ts
-// ❌ Obvious
+// ❌ Obvious — says what the code already says
 // Brighten the particle
 brightness *= 1.5;
 
-// ✅ Explains why
+// ❌ Robotic — generated doc style
+// This function calculates the orbital position based on angle and radius
+function getOrbitalPosition(angle: number, radius: number) {}
+
+// ✅ Explains the why
 // Particles brighten as they lock in so the formed shape "pops" — this is what
 // makes the reveal read as building, not just arriving
 brightness *= 1.0 + gatherRaw * FORM_BRIGHTNESS_BOOST;
+
+// ✅ Human and contextual
+// We delay the hero reveal by one frame so the loader exit finishes painting
+// before GSAP tries to measure element positions — measuring mid-transition
+// gives wrong values and breaks the stagger
+requestAnimationFrame(() => timeline.play());
 ```
 
-For multi-step complex functions (especially animation timelines), number the steps:
+For multi-step complex functions (especially animation timelines and shaders), number the steps:
 
 ```ts
 // 1. Intro — elements fade in / settle (anticipation)
 // 2. Build — staggered reveal ramps in
 // 3. Resolve — final polish, then hand off / reveal the site
 ```
+
+No JSDoc on every function. Only add JSDoc where a utility is genuinely reusable and non-obvious (e.g. a shared `lib/` helper used across multiple components).
 
 ---
 
@@ -539,6 +572,39 @@ For multi-step complex functions (especially animation timelines), number the st
 - No `any`. Use `unknown` and narrow it.
 - Type shared contracts explicitly and export them (e.g. `LoaderProps` in `components/loaders/types.ts`); derive registry key unions from them (`LoaderKey`).
 - Generic hooks should be parameterised over the element type where it helps callers (e.g. `useGsap<HTMLElement>()`).
+
+---
+
+## Single Responsibility
+
+Every file has **one job**. If a file is doing two different things, it needs to be split.
+
+- A component renders UI — it delegates animation logic to hooks, not inline in JSX
+- A hook manages one concern — scroll, cursor, GSAP lifecycle, etc.
+- A shader file contains shader code — not scene setup, not React bindings
+- A config/constants file holds static values — not logic, not side effects
+
+**Line count is a signal, not a rule.** A 300-line shader that does one thing well is fine. A 100-line component doing both animation orchestration and layout is not. When a file starts owning two clearly different concerns, split it.
+
+Example — animation hook that also handles DOM measurement is doing two jobs:
+
+```ts
+// ❌ One file doing two things
+function useHeroAnimation(containerRef) {
+  // measures DOM — one concern
+  const bounds = containerRef.current.getBoundingClientRect();
+
+  // runs animation — different concern
+  gsap.from(containerRef.current, { opacity: 0, y: 40 });
+}
+
+// ✅ Separated
+function useElementBounds(ref) { ... }   // measures DOM
+function useHeroAnimation(ref) {         // runs animation, calls useElementBounds internally
+  const bounds = useElementBounds(ref);
+  ...
+}
+```
 
 ---
 

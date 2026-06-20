@@ -299,15 +299,6 @@ body {
   overflow: hidden;
 }
 
-/* Galaxy reveal canvas — fixed so it covers the viewport */
-.hero-reveal-canvas {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  mix-blend-mode: difference;
-}
-
 /* Main content block — expands to fill, centres the title */
 .hero-main {
   flex: 1;
@@ -315,7 +306,9 @@ body {
   align-items: center;
   justify-content: center;
   position: relative;
-  z-index: 2;
+  /* z-index 5 ensures this stacking context sits above .hero-sub (z-index 2)
+     so the card covers the tagline when it expands to fill the viewport */
+  z-index: 5;
 }
 
 /* Title group — column: "we build" stacked above "W[□]rlds" */
@@ -359,7 +352,7 @@ body {
   background: #000;
   overflow: hidden;
   position: relative;
-  z-index: 2;
+  z-index: 20;
   box-shadow:
     0 0 0 1px rgba(0, 229, 255, 0.08),
     0 0 36px 0 rgba(0, 229, 255, 0.07);

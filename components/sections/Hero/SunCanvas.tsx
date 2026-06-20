@@ -22,12 +22,12 @@ export default function SunCanvas() {
     // Higher pixel ratio so the sphere stays sharp when GSAP scales the card up
     renderer.setPixelRatio(Math.min(window.devicePixelRatio * 2, 4));
 
-    const width  = canvas.clientWidth  || canvas.offsetWidth  || 900;
-    const height = canvas.clientHeight || canvas.offsetHeight || 300;
-    renderer.setSize(width, height, false);
+    const initialWidth  = canvas.clientWidth  || canvas.offsetWidth  || 900;
+    const initialHeight = canvas.clientHeight || canvas.offsetHeight || 300;
+    renderer.setSize(initialWidth, initialHeight, false);
 
     const scene  = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(CAMERA_FOV, width / height, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(CAMERA_FOV, initialWidth / initialHeight, 0.1, 100);
     camera.position.z = CAMERA_Z;
 
     // ── Sun sphere ─────────────────────────────────────────────────
@@ -74,12 +74,12 @@ export default function SunCanvas() {
 
     // ── Resize ────────────────────────────────────────────────────
     const handleResize = () => {
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
-      if (w === 0 || h === 0) return;
-      camera.aspect = w / h;
+      const canvasWidth  = canvas.clientWidth;
+      const canvasHeight = canvas.clientHeight;
+      if (canvasWidth === 0 || canvasHeight === 0) return;
+      camera.aspect = canvasWidth / canvasHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h, false);
+      renderer.setSize(canvasWidth, canvasHeight, false);
     };
 
     const observer = new ResizeObserver(handleResize);

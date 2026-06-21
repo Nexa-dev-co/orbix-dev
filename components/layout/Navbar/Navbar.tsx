@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import { useNavbarAnimation } from '@/lib/hooks/useNavbarAnimation';
 
 const NAV_ITEMS = [
-  { number: '01', label: 'Services', href: '#services' },
+  { number: '01', label: 'Services', href: '/services' },
   { number: '02', label: 'Work',     href: '#work'     },
   { number: '03', label: 'Process',  href: '#process'  },
   { number: '04', label: 'Contact',  href: '#contact'  },

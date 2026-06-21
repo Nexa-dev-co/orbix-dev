@@ -445,6 +445,328 @@ body {
   text-align: center;
 }
 
+/* ─── Services — The Fleet (/services) ───────────────────────────── */
+
+/* Single cinematic screen: full-bleed WebGL vessel behind, index overlaid left. */
+.services-page {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: 100vh;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* WebGL viewer — full-bleed, behind the overlay */
+.fleet-viewer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.fleet-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Volumetric glow the vessel appears to hover within (right of centre on desktop) */
+.fleet-viewer-glow {
+  position: absolute;
+  right: 6%;
+  top: 50%;
+  width: 62vh;
+  height: 62vh;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(0, 229, 255, 0.12) 0%,
+    rgba(0, 90, 130, 0.05) 38%,
+    transparent 70%
+  );
+  filter: blur(24px);
+  pointer-events: none;
+}
+
+/* Loading state — ring + count while the 3D vessel streams in */
+.fleet-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+}
+
+.fleet-loading.is-visible {
+  opacity: 1;
+}
+
+.fleet-loading-ring {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 229, 255, 0.18);
+  border-top-color: var(--accent);
+  animation: fleet-spin 0.9s linear infinite;
+}
+
+@keyframes fleet-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fleet-loading-label {
+  font-family: var(--font-dm-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(0, 229, 255, 0.6);
+}
+
+/* Overlay — index + copy. Left scrim keeps text legible over the starfield. */
+.services-overlay {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100vh;
+  padding: clamp(92px, 12vh, 132px) clamp(24px, 5vw, 80px) clamp(28px, 5vh, 44px);
+  background: linear-gradient(
+    90deg,
+    rgba(6, 6, 6, 0.92) 0%,
+    rgba(6, 6, 6, 0.55) 30%,
+    rgba(6, 6, 6, 0) 58%
+  );
+  pointer-events: none;
+}
+
+/* Re-enable interaction only where it's needed (index buttons) */
+.services-index-item {
+  pointer-events: auto;
+}
+
+.services-head {
+  max-width: 560px;
+}
+
+.services-title {
+  margin-top: 16px;
+  font-weight: 800;
+  font-size: clamp(2.2rem, 4.6vw, 4rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  color: var(--fg);
+}
+
+/* Body — index stacked above the active detail, vertically centred, left-aligned */
+.services-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(26px, 4vh, 46px);
+  max-width: 560px;
+}
+
+.services-index ul {
+  list-style: none;
+}
+
+.services-index-item {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  width: 100%;
+  padding: 9px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* The active marker grows via scaleX (transform, not width) to avoid layout thrash */
+.services-index-line {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 30px;
+  height: 1px;
+  transform: translateY(-50%) scaleX(0);
+  transform-origin: left center;
+  background: var(--accent);
+  box-shadow: 0 0 9px rgba(0, 229, 255, 0.65);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.services-index-item.is-active .services-index-line {
+  transform: translateY(-50%) scaleX(1);
+}
+
+/* Active label slides clear of the marker via translate (transform, not padding) */
+.services-index-number {
+  flex-shrink: 0;
+  font-family: var(--font-dm-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s ease;
+}
+
+.services-index-item.is-active .services-index-number {
+  color: var(--accent);
+}
+
+.services-index-item.is-active .services-index-number,
+.services-index-item.is-active .services-index-name {
+  transform: translateX(42px);
+}
+
+.services-index-name {
+  font-weight: 700;
+  font-size: clamp(1.05rem, 1.5vw, 1.42rem);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  color: rgba(235, 232, 224, 0.5);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s ease;
+}
+
+.services-index-item:hover .services-index-name {
+  color: rgba(235, 232, 224, 0.86);
+}
+
+.services-index-item.is-active .services-index-name {
+  color: var(--fg);
+}
+
+/* Active detail — re-mounts on selection (keyed), so it re-reveals each time */
+.services-detail {
+  animation: fleet-detail-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.services-detail-eyebrow {
+  font-family: var(--font-syne), sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.05rem, 1.6vw, 1.4rem);
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  margin-bottom: 14px;
+  animation: fleet-detail-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.services-detail-copy {
+  max-width: 44ch;
+  margin-bottom: 22px;
+  font-size: clamp(0.84rem, 1vw, 0.95rem);
+  line-height: 1.8;
+  color: rgba(235, 232, 224, 0.7);
+  animation: fleet-detail-in 0.6s 0.06s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.services-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  animation: fleet-detail-in 0.6s 0.12s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.services-tag {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(235, 232, 224, 0.02);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(235, 232, 224, 0.6);
+}
+
+@keyframes fleet-detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Footer — service counter + hint */
+.services-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.services-counter {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-syne), sans-serif;
+}
+
+.services-counter-current {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--fg);
+}
+
+.services-counter-divider,
+.services-counter-total {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.services-hint {
+  font-family: var(--font-dm-sans), sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Stacked layout — vessel re-centres behind, text pushed to the bottom */
+@media (max-width: 820px) {
+  .services-overlay {
+    background: linear-gradient(
+      0deg,
+      rgba(6, 6, 6, 0.95) 0%,
+      rgba(6, 6, 6, 0.65) 42%,
+      rgba(6, 6, 6, 0) 78%
+    );
+  }
+
+  .services-body {
+    flex: none;
+    justify-content: flex-end;
+    max-width: none;
+  }
+
+  .fleet-viewer-glow {
+    right: 50%;
+    top: 38%;
+    transform: translate(50%, -50%);
+  }
+
+  .services-hint {
+    display: none;
+  }
+}
+
 /* ─── Reduced motion ─────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

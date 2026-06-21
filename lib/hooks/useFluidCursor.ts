@@ -9,8 +9,6 @@ import { createFluidSimulation } from '@/components/effects/FluidCursor/fluidSim
 
 const MAX_DEVICE_PIXEL_RATIO = 2;
 const MAX_FRAME_SECONDS = 1 / 60;
-// The cursor never paints over this element, so the hero sun square stays clean.
-const EXCLUDED_ELEMENT_SELECTOR = '.hero-sun-card';
 
 /**
  * Drives the fluid cursor: one WebGL sim renders dark ink + stars to `inkCanvas`,
@@ -51,6 +49,17 @@ export function useFluidCursor(
     const simulation = createFluidSimulation(inkCanvas, FLUID_CONFIG);
     if (!simulation) return;
 
+    // The trail is scoped to the hero: once the hero scrolls out of view we stop
+    // splatting and rendering so it never reacts over the sections below.
+    let isHeroVisible = true;
+    const visibilityObserver = new IntersectionObserver(
+      ([entry]) => {
+        isHeroVisible = entry.isIntersecting;
+      },
+      { threshold: 0 }
+    );
+    visibilityObserver.observe(inkCanvas);
+
     // ── Pointer tracking ──────────────────────────────────────────────
     let hasLastPointer = false;
     let lastClientX = 0;
@@ -58,6 +67,7 @@ export function useFluidCursor(
     let lastPointerTime = 0;
 
     const handlePointerMove = (clientX: number, clientY: number) => {
+      if (!isHeroVisible) return;
       const now = performance.now();
       const uvX = clientX / window.innerWidth;
       const uvY = 1 - clientY / window.innerHeight;
@@ -109,6 +119,9 @@ export function useFluidCursor(
     const renderFrame = () => {
       animationFrame = requestAnimationFrame(renderFrame);
 
+      // Idle the whole sim while the hero is off screen — nothing to draw, no work.
+      if (!isHeroVisible) return;
+
       const now = performance.now();
       const deltaSeconds = Math.min((now - lastFrameTime) / 1000, MAX_FRAME_SECONDS);
       lastFrameTime = now;
@@ -116,23 +129,6 @@ export function useFluidCursor(
       if (resizeCanvases()) simulation.resize();
 
       simulation.frame(deltaSeconds, (now - startTime) / 1000);
-
-      // Keep the excluded element (the hero sun square) clean: erase its rect from
-      // the ink before it gets copied into the invert layer, so neither layer
-      // touches it. getBoundingClientRect tracks its scroll-driven scale for free.
-      const excludedElement = document.querySelector(EXCLUDED_ELEMENT_SELECTOR);
-      if (excludedElement) {
-        const bounds = excludedElement.getBoundingClientRect();
-        if (bounds.width > 0 && bounds.height > 0) {
-          const ratio = pixelRatio();
-          simulation.clearRegion(
-            bounds.left * ratio,
-            (window.innerHeight - bounds.bottom) * ratio,
-            bounds.width * ratio,
-            bounds.height * ratio
-          );
-        }
-      }
 
       // Copy the ink silhouette into the invert layer as a solid white mask,
       // keeping only the alpha. With mix-blend-mode: difference this inverts the
@@ -149,6 +145,7 @@ export function useFluidCursor(
 
     return () => {
       cancelAnimationFrame(animationFrame);
+      visibilityObserver.disconnect();
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('resize', resizeCanvases);

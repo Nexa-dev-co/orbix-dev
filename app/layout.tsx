@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { Syne, DM_Sans } from 'next/font/google';
 import Navbar from '@/components/layout/Navbar/Navbar';
-import FluidCursor from '@/components/effects/FluidCursor/FluidCursor';
 import './globals.css';
 
 const syne = Syne({
@@ -37,7 +36,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Navbar />
         {children}
-        <FluidCursor />
       </body>
     </html>
   );

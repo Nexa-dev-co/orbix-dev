@@ -24,18 +24,6 @@ export const BASE_VERTEX_SHADER = /* glsl */ `
   }
 `;
 
-export const COPY_SHADER = /* glsl */ `
-  precision mediump float;
-  precision mediump sampler2D;
-
-  varying highp vec2 vUv;
-  uniform sampler2D uTexture;
-
-  void main () {
-    gl_FragColor = texture2D(uTexture, vUv);
-  }
-`;
-
 export const CLEAR_SHADER = /* glsl */ `
   precision mediump float;
   precision mediump sampler2D;
@@ -255,28 +243,50 @@ export const DISPLAY_SHADER = /* glsl */ `
   uniform float uStarFillRatio;
   uniform float uStarBrightness;
   uniform float uStarTwinkleSpeed;
-  uniform vec3 uStarColor;
+  uniform vec3 uStarColorA;
+  uniform vec3 uStarColorB;
 
   float hash (vec2 cell) {
     return fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453123);
   }
 
-  // One star per grid cell, only in cells whose hash passes the fill ratio.
-  float starField (vec2 uv) {
+  // Each cell's star is one of the two palette colours, picked by its hash.
+  vec3 starColorFor (vec2 cell) {
+    return hash(cell + 4.3) < 0.5 ? uStarColorA : uStarColorB;
+  }
+
+  // One star per grid cell. We scan the 3×3 cells around the current pixel so a star
+  // whose glow spills past its own cell border is still drawn whole by the neighbour —
+  // sampling only the home cell is what clipped stars to halves at the boundaries.
+  // Returns rgb = colour * intensity, a = intensity (for the alpha punch-through).
+  vec4 starField (vec2 uv) {
     vec2 grid = uv * (uResolution / uStarCellSize);
-    vec2 cell = floor(grid);
+    vec2 baseCell = floor(grid);
     vec2 inCell = fract(grid);
 
-    float exists = step(uStarFillRatio, hash(cell));
-    vec2 starPosition = vec2(hash(cell + 1.7), hash(cell + 9.2));
-    float distanceToStar = length(inCell - starPosition);
+    vec4 accumulated = vec4(0.0);
+    for (int offsetY = -1; offsetY <= 1; offsetY++) {
+      for (int offsetX = -1; offsetX <= 1; offsetX++) {
+        vec2 neighbor = vec2(float(offsetX), float(offsetY));
+        vec2 cell = baseCell + neighbor;
 
-    // soft halo + tight core
-    float glow = smoothstep(0.30, 0.0, distanceToStar) * 0.35
-               + smoothstep(0.06, 0.0, distanceToStar);
-    float twinkle = 0.55 + 0.45 * sin(uTime * uStarTwinkleSpeed + hash(cell) * 6.2831);
+        float exists = step(uStarFillRatio, hash(cell));
+        // Star position expressed relative to the current cell's origin, so the
+        // distance is measured in the pixel's own cell space.
+        vec2 starPosition = neighbor + vec2(hash(cell + 1.7), hash(cell + 9.2));
+        float distanceToStar = length(inCell - starPosition);
 
-    return exists * glow * twinkle;
+        // soft halo + tight core
+        float glow = smoothstep(0.30, 0.0, distanceToStar) * 0.35
+                   + smoothstep(0.06, 0.0, distanceToStar);
+        float twinkle = 0.55 + 0.45 * sin(uTime * uStarTwinkleSpeed + hash(cell) * 6.2831);
+
+        float intensity = exists * glow * twinkle;
+        accumulated.rgb += starColorFor(cell) * intensity;
+        accumulated.a += intensity;
+      }
+    }
+    return accumulated;
   }
 
   void main () {
@@ -288,11 +298,13 @@ export const DISPLAY_SHADER = /* glsl */ `
     vec3 color = uInkColor * inkAlpha;
     float alpha = inkAlpha;
 
-    // Stars only appear inside the fluid, and brighten both colour and alpha
-    // so they punch through the dark veil as real points of light.
-    float star = starField(vUv) * uStarBrightness * presence;
-    color += uStarColor * star;
-    alpha = clamp(alpha + star, 0.0, 1.0);
+    // Stars only exist inside the fluid. Guarding on presence also skips the costly
+    // 3×3 scan for the (vast majority of) pixels outside the blob.
+    if (presence > 0.001) {
+      vec4 stars = starField(vUv) * (uStarBrightness * presence);
+      color += stars.rgb;
+      alpha = clamp(alpha + stars.a, 0.0, 1.0);
+    }
 
     gl_FragColor = vec4(color, alpha);
   }

@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import { useHeroAnimation } from '@/lib/hooks/useHeroAnimation';
+import FluidCursor from '@/components/effects/FluidCursor/FluidCursor';
 
 export default function Hero() {
   const heroSectionRef = useRef<HTMLElement>(null);
@@ -11,6 +12,10 @@ export default function Hero() {
 
   return (
     <section ref={heroSectionRef} className="hero-section">
+
+      {/* Fluid ink trail — scoped to the hero. Its absolute canvases sit between the
+          tagline (below, so the ink inverts it) and the headline/sun (above). */}
+      <FluidCursor />
 
       <div className="hero-main">
         <div
@@ -41,6 +46,8 @@ export default function Hero() {
         </div>
       </div>
 
+      {/* Dark on the cream hero, and sits below the trail (z-index 1) so the ink
+          inverts it to light — the tagline glows through the ink as the trail crosses it. */}
       <p className="hero-sub">software with its own gravity</p>
 
     </section>

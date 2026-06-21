@@ -55,4 +55,8 @@ export const STAR_CELL_SIZE_PX = 46; // grid cell that may contain one star
 export const STAR_FILL_RATIO = 0.55; // fraction of cells that actually hold a star
 export const STAR_BRIGHTNESS = 0.85;
 export const STAR_TWINKLE_SPEED = 1.6;
-export const STAR_COLOR: readonly [number, number, number] = [0.78, 0.92, 1.0];
+// Each star randomly picks one of these two: white and a deep cool blue.
+export const STAR_PALETTE: readonly (readonly [number, number, number])[] = [
+  [1.0, 1.0, 1.0], // white
+  [0.2, 0.4, 1.0], // dark blue
+];

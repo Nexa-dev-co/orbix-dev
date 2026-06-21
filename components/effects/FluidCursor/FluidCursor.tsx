@@ -3,13 +3,17 @@
 import { useRef } from 'react';
 import { useFluidCursor } from '@/lib/hooks/useFluidCursor';
 
-// Two stacked full-viewport canvases fed by one fluid sim:
-//   1. invert layer (mix-blend-mode: difference) — inverts the page beneath the
-//      fluid so text glows through.
+// Two stacked canvases fed by one fluid sim, covering the hero section:
+//   1. invert layer (mix-blend-mode: difference) — inverts the hero beneath the
+//      fluid, so the cream turns to ink and the dark tagline glows light through it.
 //   2. ink layer — the dark ink + stars, semi-transparent so the inverted text
 //      shows through it (the backlit-in-dark-water look).
-// Both ignore pointer events and sit above all page content.
-const LAYER_Z_INDEX = 9000;
+// Rendered as bare siblings (not wrapped) so each stays in the hero's stacking
+// context and the difference layer blends against the hero's content. Both are
+// absolute within the (isolated, position:relative) hero, ignore pointer events, and
+// sit above the tagline (z 1) and below the headline/sun (z 4).
+const INVERT_Z_INDEX = 2;
+const INK_Z_INDEX = 3;
 
 export default function FluidCursor() {
   const inkCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,23 +22,25 @@ export default function FluidCursor() {
   useFluidCursor(inkCanvasRef, invertCanvasRef);
 
   const sharedStyle: React.CSSProperties = {
-    position: 'fixed',
+    position: 'absolute',
     inset: 0,
-    width: '100vw',
-    height: '100vh',
+    width: '100%',
+    height: '100%',
     pointerEvents: 'none',
   };
 
   return (
-    <div aria-hidden="true">
+    <>
       <canvas
         ref={invertCanvasRef}
-        style={{ ...sharedStyle, zIndex: LAYER_Z_INDEX, mixBlendMode: 'difference' }}
+        aria-hidden="true"
+        style={{ ...sharedStyle, zIndex: INVERT_Z_INDEX, mixBlendMode: 'difference' }}
       />
       <canvas
         ref={inkCanvasRef}
-        style={{ ...sharedStyle, zIndex: LAYER_Z_INDEX + 1, mixBlendMode: 'normal' }}
+        aria-hidden="true"
+        style={{ ...sharedStyle, zIndex: INK_Z_INDEX, mixBlendMode: 'normal' }}
       />
-    </div>
+    </>
   );
 }

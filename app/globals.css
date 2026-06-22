@@ -31,6 +31,14 @@ html::-webkit-scrollbar {
   display: none;
 }
 
+/* Intro lock — the loading screen holds the page at the top so scroll can't drive the
+   hero's pinned sun animation before the intro has finished placing it. The scrollbar
+   is already hidden (scrollbar-width: none), so toggling overflow causes no layout shift. */
+html.scroll-locked,
+html.scroll-locked body {
+  overflow: hidden;
+}
+
 body {
   background: var(--bg);
   color: var(--fg);
@@ -76,10 +84,51 @@ body {
   padding: 0 clamp(24px, 4vw, 56px);
   z-index: 9999; /* above the fluid cursor (9000/9001) and the sun card (9500) */
   opacity: 0; /* GSAP drives entrance */
-  /* Definite base background so the bar always has its colour; the nav hook
-     animates the opacity/blur on scroll on top of this. */
-  background: rgba(6, 6, 6, 0.6);
-  border-bottom: 1px solid rgba(235, 232, 224, 0.05);
+  /* Transparent + difference blend: the bar's white content inverts against whatever
+     scrolls underneath it (cream hero → dark text, black sections → light text). The
+     blend lives on this fixed element itself — a fixed ancestor is its own stacking
+     context, so blending on an inner wrapper would only invert against the bar, not
+     the page. The cyan accents live in .nav-accent below to stay un-inverted. */
+  background: transparent;
+  mix-blend-mode: difference;
+  /* White is the difference identity we invert from: white − cream = dark, white − black = white. */
+  color: #fff;
+}
+
+/* Non-blended sibling carrying the brand cyan so it never inverts. Mirrors the bar's
+   flex layout so the cyan logo mark lands over .nav-root's transparent mark spacer. */
+.nav-accent {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(24px, 4vw, 56px);
+  z-index: 9998; /* directly behind the blended bar */
+  opacity: 0; /* GSAP drives entrance alongside .nav-root */
+  pointer-events: none; /* never intercept clicks meant for the real nav */
+}
+
+.nav-accent-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* must match .nav-logo so the mark aligns with the bar's spacer */
+}
+
+/* Invisible wordmark — reserves width only, so the visible blended wordmark lines up. */
+.nav-ghost {
+  visibility: hidden;
+}
+
+/* Transparent stand-in for the cyan mark, which is painted by .nav-accent. */
+.nav-mark-spacer {
+  display: block;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
 }
 
 .nav-accent-line {
@@ -107,7 +156,7 @@ body {
   align-items: center;
   gap: 10px;
   text-decoration: none;
-  color: var(--fg);
+  color: #fff;
   flex-shrink: 0;
 }
 
@@ -172,7 +221,7 @@ body {
   align-items: center;
   gap: 3px;
   text-decoration: none;
-  color: var(--fg);
+  color: #fff;
   position: relative;
   padding-bottom: 3px;
 }
@@ -181,7 +230,7 @@ body {
   font-size: 8px;
   font-family: var(--font-dm-sans), sans-serif;
   font-weight: 400;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.4);
   letter-spacing: 0.2em;
   line-height: 1;
   transition: color 0.25s ease;
@@ -192,7 +241,7 @@ body {
   font-family: var(--font-dm-sans), sans-serif;
   font-weight: 400;
   letter-spacing: 0.03em;
-  color: rgba(235, 232, 224, 0.7);
+  color: rgba(255, 255, 255, 0.72);
   line-height: 1;
   transition: color 0.25s ease;
 }
@@ -219,7 +268,7 @@ body {
 }
 
 .nav-link:hover .nav-link-label {
-  color: var(--fg);
+  color: #fff;
 }
 
 /* CTA */
@@ -232,7 +281,7 @@ body {
   background: transparent;
   border: none;
   cursor: pointer;
-  color: rgba(235, 232, 224, 0.75);
+  color: rgba(255, 255, 255, 0.78);
   font-family: var(--font-dm-sans), sans-serif;
   font-size: 12.5px;
   font-weight: 400;
@@ -245,7 +294,7 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1px solid rgba(235, 232, 224, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   pointer-events: none;
   transition: border-color 0.3s ease;
 }
@@ -342,18 +391,26 @@ body {
   flex-direction: column;
   align-items: center;
   overflow: hidden;
+
+  /* Headline + tagline glyph colour, fed through mix-blend-mode: difference. Because
+     difference is symmetric, the glyph colour — not opacity — controls how far they
+     invert: a light grey gives near-black on the cream at rest and a soft grey (NOT
+     white) over the dark ink trail. Push toward #fff for a whiter/stronger invert,
+     toward mid-grey for a darker/softer one (which also lifts the resting black a touch). */
+  --hero-invert-text: #c0c0c0;
 }
 
-/* Main content block — expands to fill, centres the title */
+/* Main content block — expands to fill, centres the title. No z-index here on purpose:
+   it must NOT be a stacking context, or it would isolate the headline's difference
+   blend (a fixed/positioned ancestor traps mix-blend so it inverts against the bar
+   instead of the hero). Ordering above the trail is handled per element below
+   (.hero-mask z 5, .hero-sun-card z 20), all relative to the hero section. */
 .hero-main {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  /* Above the hero-local ink trail (z 2/3) so the headline and sun render over it,
-     and so the sun card covers the tagline as it expands to fill the viewport */
-  z-index: 4;
 }
 
 /* Title group — column: "we build" stacked above "W[□]rlds" */
@@ -363,7 +420,9 @@ body {
   align-items: flex-start;
 }
 
-/* Shared display type */
+/* Shared display type. Glyph colour is the light-grey --hero-invert-text; through the
+   difference blend on .hero-mask it reads near-black on the cream at rest and soft grey
+   (not white) where the cursor trail crosses it. */
 .hero-line-top,
 .hero-letter {
   font-family: var(--font-syne), sans-serif;
@@ -371,7 +430,7 @@ body {
   font-size: clamp(3rem, 8.5vw, 7.5rem);
   line-height: 1;
   letter-spacing: -0.03em;
-  color: #0c0c0c;
+  color: var(--hero-invert-text);
 }
 
 .hero-line-top {
@@ -419,28 +478,37 @@ body {
   height: 100%;
 }
 
-/* Headline mask-wipe: each line/word rises out of a clipping window on reveal */
+/* Headline mask-wipe: each line/word rises out of a clipping window on reveal.
+   position + z-index lift the text above the ink trail (z 2/3) but keep it below the
+   sun square (z 20) so the square still covers it on scroll; mix-blend-mode: difference
+   then inverts the grey glyphs against whatever is underneath — near-black on the cream
+   hero at rest, soft grey where the cursor trail crosses them. The invert amount is set
+   by --hero-invert-text (the glyph colour), so opacity stays at 1 for crisp text. */
 .hero-mask {
   display: inline-block;
   overflow: hidden;
   vertical-align: bottom;
+  position: relative;
+  z-index: 5;
+  mix-blend-mode: difference;
 }
 .hero-mask-inner {
   display: inline-block;
 }
 
-/* Tagline — sits at the natural bottom of the flex column. Electric blue on the cream
-   hero so it's bright and clearly visible, and z-index 1 keeps it just below the ink
-   trail (z 2/3) so the difference layer inverts it as the trail crosses it. */
+/* Tagline — sits at the natural bottom of the flex column. Same invert as the headline:
+   grey glyphs (--hero-invert-text) lifted above the ink trail (z 5) with mix-blend-mode:
+   difference. Reads near-black on the cream at rest, soft grey where the trail crosses. */
 .hero-sub {
   position: relative;
-  z-index: 1;
+  z-index: 5;
+  mix-blend-mode: difference;
   font-family: var(--font-dm-sans), sans-serif;
   font-size: clamp(0.6rem, 1vw, 0.8rem);
   font-weight: 500;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: #1a3ad6;
+  color: var(--hero-invert-text);
   padding-bottom: 36px;
   text-align: center;
 }

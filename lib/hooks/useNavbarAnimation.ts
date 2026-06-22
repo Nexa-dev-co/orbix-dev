@@ -1,28 +1,28 @@
 import { useEffect, type RefObject } from 'react';
 import gsap from 'gsap';
 
-const ENTRANCE_DELAY         = 0.15;
-const ENTRANCE_DURATION      = 0.9;
-const SCROLL_FADE_THRESHOLD  = 100; // px of scroll before nav background fully opaques
-const BG_OPACITY_BASE        = 0.55;
-const BG_OPACITY_RANGE       = 0.35;
-const BLUR_BASE_PX           = 14;
-const BLUR_RANGE_PX          = 10;
+const ENTRANCE_DELAY    = 0.15;
+const ENTRANCE_DURATION = 0.9;
 
 interface NavbarAnimationRefs {
   navRef:         RefObject<HTMLElement | null>;
+  accentRef:      RefObject<HTMLDivElement | null>;
   progressBarRef: RefObject<HTMLDivElement | null>;
 }
 
 export function useNavbarAnimation(navbarAnimationRefs: NavbarAnimationRefs) {
-  const { navRef, progressBarRef } = navbarAnimationRefs;
+  const { navRef, accentRef, progressBarRef } = navbarAnimationRefs;
 
   useEffect(() => {
-    const navElement        = navRef.current;
+    const navElement         = navRef.current;
+    const accentElement      = accentRef.current;
     const progressBarElement = progressBarRef.current;
     if (!navElement) return;
 
-    // 1. Entrance — nav slides down and items stagger in
+    // 1. Entrance — the bar slides down and items stagger in. The cyan accent layer
+    //    fades in alongside it so the un-inverted mark/line don't pop separately.
+    //    (No scroll-driven background/blur here: the bar is transparent so its
+    //    mix-blend-mode: difference can invert against the page underneath it.)
     const entranceTimeline = gsap.timeline({ delay: ENTRANCE_DELAY });
 
     entranceTimeline
@@ -46,31 +46,22 @@ export function useNavbarAnimation(navbarAnimationRefs: NavbarAnimationRefs) {
         '<0.1',
       );
 
-    // 2. Scroll — background opacity + blur increase as user scrolls past threshold
-    const updateNavBackground = () => {
-      const currentScrollY       = window.scrollY;
+    if (accentElement) {
+      entranceTimeline.to(accentElement, { opacity: 1, duration: ENTRANCE_DURATION, ease: 'expo.out' }, 0);
+    }
+
+    // 2. Scroll — drive only the progress bar width (no background to animate now).
+    const updateProgressBar = () => {
+      if (!progressBarElement) return;
       const maxScrollableDistance = Math.max(document.body.scrollHeight - window.innerHeight, 1);
-      const scrollFadeProgress   = Math.min(currentScrollY / SCROLL_FADE_THRESHOLD, 1);
-      const pageScrollProgress   = currentScrollY / maxScrollableDistance;
-
-      const backgroundOpacity = BG_OPACITY_BASE + scrollFadeProgress * BG_OPACITY_RANGE;
-      const blurAmount        = BLUR_BASE_PX    + scrollFadeProgress * BLUR_RANGE_PX;
-
-      navElement.style.background     = `rgba(6, 6, 6, ${backgroundOpacity})`;
-      navElement.style.backdropFilter = `blur(${blurAmount}px)`;
-      navElement.style.setProperty('-webkit-backdrop-filter', `blur(${blurAmount}px)`);
-
-      if (progressBarElement) {
-        progressBarElement.style.width = `${pageScrollProgress * 100}%`;
-      }
+      const pageScrollProgress    = window.scrollY / maxScrollableDistance;
+      progressBarElement.style.width = `${pageScrollProgress * 100}%`;
     };
 
-    // Set initial background before any scroll occurs
-    updateNavBackground();
-
-    window.addEventListener('scroll', updateNavBackground, { passive: true });
+    updateProgressBar();
+    window.addEventListener('scroll', updateProgressBar, { passive: true });
     return () => {
-      window.removeEventListener('scroll', updateNavBackground);
+      window.removeEventListener('scroll', updateProgressBar);
       entranceTimeline.kill();
     };
   }, []);

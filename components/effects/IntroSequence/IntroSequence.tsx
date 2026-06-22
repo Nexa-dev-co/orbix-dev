@@ -42,6 +42,19 @@ const SUN_IN_O_RATIO = 1.3;
 
 const OVERLAY_Z_INDEX = 10000;
 
+// Scroll lock — held for the whole intro so a stray scroll can't drive the hero's
+// pinned sun (ScrollTrigger is live from mount) before the intro lands it.
+const SCROLL_LOCK_CLASS = "scroll-locked";
+const SCROLL_BLOCK_KEYS = new Set([
+  " ",
+  "ArrowUp",
+  "ArrowDown",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+]);
+
 export default function IntroSequence() {
   const rootRef = useRef<HTMLDivElement>(null);
   const veilRef = useRef<HTMLDivElement>(null);
@@ -58,6 +71,37 @@ export default function IntroSequence() {
     const revealHero = () => window.dispatchEvent(new Event(REVEAL_EVENT));
     const sunLayer = document.querySelector(SUN_LAYER_SELECTOR);
     const sunFlight = document.querySelector(SUN_FLIGHT_SELECTOR);
+
+    // Hold the page at the top for the duration of the intro. overflow:hidden stops
+    // the wheel/trackpad; the explicit listeners cover keyboard + any browser that
+    // still leaks momentum scroll past overflow:hidden.
+    const preventScroll = (scrollEvent: Event) => scrollEvent.preventDefault();
+    const preventScrollKeys = (keyboardEvent: KeyboardEvent) => {
+      if (SCROLL_BLOCK_KEYS.has(keyboardEvent.key)) keyboardEvent.preventDefault();
+    };
+    const lockScroll = () => {
+      // Stop the browser restoring a previous scroll position on reload — otherwise the
+      // page can start the intro already scrolled down, before this lock runs.
+      if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = "manual";
+      }
+      window.scrollTo(0, 0);
+      document.documentElement.classList.add(SCROLL_LOCK_CLASS);
+      window.addEventListener("wheel", preventScroll, { passive: false });
+      window.addEventListener("touchmove", preventScroll, { passive: false });
+      window.addEventListener("keydown", preventScrollKeys);
+    };
+    const unlockScroll = () => {
+      document.documentElement.classList.remove(SCROLL_LOCK_CLASS);
+      window.removeEventListener("wheel", preventScroll);
+      window.removeEventListener("touchmove", preventScroll);
+      window.removeEventListener("keydown", preventScrollKeys);
+      // No ScrollTrigger.refresh() needed: the hero's scroll-expansion is built lazily
+      // at REVEAL_EVENT (see useHeroAnimation / Contract 2), so it already measured a
+      // settled, top-of-page layout.
+    };
+
+    lockScroll();
 
     // Offset the inner sun from the square (its home) into the "o" slot. Called
     // when the wordmark resolves and re-called right before the flight so the
@@ -83,13 +127,24 @@ export default function IntroSequence() {
       if (sunFlight) gsap.set(sunFlight, { x: 0, y: 0, scale: 1 });
       const timeoutId = window.setTimeout(() => {
         revealHero();
+        unlockScroll();
         setDone(true);
       }, REDUCED_MOTION_DELAY * 1000);
-      return () => window.clearTimeout(timeoutId);
+      return () => {
+        window.clearTimeout(timeoutId);
+        unlockScroll();
+      };
     }
 
     const counterProgress = { value: 0 };
-    const timeline = gsap.timeline({ onComplete: () => setDone(true) });
+    // Release the scroll lock when the intro actually finishes (the component returns
+    // null but stays mounted, so the effect cleanup can't be relied on to unlock).
+    const timeline = gsap.timeline({
+      onComplete: () => {
+        unlockScroll();
+        setDone(true);
+      },
+    });
 
     // 1. Editorial frame + corner chrome settle in. (fromTo, not from, so the end
     //    state is explicit — a bare from() mis-captures its end value under React
@@ -239,6 +294,7 @@ export default function IntroSequence() {
 
     return () => {
       timeline.kill();
+      unlockScroll();
     };
   }, []);
 

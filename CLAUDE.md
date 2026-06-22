@@ -608,6 +608,48 @@ function useHeroAnimation(ref) {         // runs animation, calls useElementBoun
 
 ---
 
+## Intro & Hero Animation Timeline (read before adding or animating hero / scroll effects)
+
+The site is gated behind `IntroSequence` (the loading screen). It plays a single GSAP
+timeline, drives the one shared sun, then hands off to the hero. Two hard contracts
+protect it — break either and the sun will fight the scroll.
+
+### Phases (one GSAP timeline in `IntroSequence.tsx`, ~6s; durations come from the named constants there)
+
+1. **Frame in** — editorial frame scales in (0.7s) + corner chrome fades/staggers in (0.5s).
+2. **Counter** — ghost percentage climbs 0 → 100 (1.95s), running under everything.
+3. **Word cycle** — slot-machine of 6 words rips through the centre (0.2s each, ~1.2s total).
+4. **Sun solo** — wordmark container appears and the shared sun fades in alone inside the "o" (0.45s) + a short hold (0.2s).
+5. **Wordmark resolve** — "rbix" letters spring in from the centre (0.9s) + accent underline draws (0.7s).
+6. **Hold** before handoff (0.45s).
+7. **Handoff** — chrome/frame/counter/wordmark fade out (0.4s); the dark veil lifts (0.7s); the sun shrinks and flies from the "o" into the hero square (1.1s).
+8. **Reveal** — ~0.1s before the flight lands, `REVEAL_EVENT` fires → the hero reveals (headline rises from its masks, the black square "pours" in, tagline settles, 0.4s) → the timeline's `onComplete` unlocks scroll and the intro unmounts.
+
+### Contract 1 — scroll is locked for the entire intro
+
+`IntroSequence` locks scroll on mount (`html.scroll-locked` → `overflow:hidden`, plus
+`wheel` / `touchmove` / scroll-key `preventDefault`, plus `history.scrollRestoration =
+'manual'` and `scrollTo(0, 0)`) and releases it exactly once in the timeline's
+`onComplete`. The component returns `null` when done but **stays mounted**, so never rely
+on the effect cleanup to unlock — unlock where the intro actually finishes.
+
+### Contract 2 — no scroll-driven hero animation may exist during the intro
+
+The hero's pinned/scrubbed scroll-expansion ScrollTrigger is created **only when
+`REVEAL_EVENT` fires** (after the sun has landed), never on mount. Any new scroll-driven
+animation on the hero or the sun must be gated the same way — build it inside the reveal
+handler, or create it `disable()`d and `enable()` it on `REVEAL_EVENT`. Otherwise a
+restored or stray scroll moves the sun while the loader is still up.
+
+### The shared sun
+
+There is exactly one sun: `HeroSun` → `SunCanvas`. The intro only *drives* it via
+`.hero-sun-layer` (outer — opacity + the scroll transform) and `.hero-sun-flight` (inner —
+the o → square flight). `REVEAL_EVENT` is the single handoff signal from intro → hero;
+anything that must wait for "site ready" should listen for it (with a fallback timeout).
+
+---
+
 ## General Rules
 
 - No magic numbers. Named constants only — declare them at the top of the file, never inline.

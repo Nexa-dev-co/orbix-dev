@@ -58,55 +58,66 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
     if (subline) gsap.set(subline, { autoAlpha: 0, y: 12 });
     if (squareFill) gsap.set(squareFill, { clipPath: EMPTY_CLIP });
 
-    // 2. Scroll — the black square expands to fill the viewport while the sun
-    //    layer translates to centre and grows to 2×. The sun layer only owns its
-    //    outer transform here; the intro owns the inner ".hero-sun-flight".
-    const cardBoundingRect  = measureCardLayout(heroCardElement);
-    const cardCenterX       = cardBoundingRect.left + cardBoundingRect.width  / 2;
-    const cardCenterY       = cardBoundingRect.top  + cardBoundingRect.height / 2;
-    const viewportCenterX   = document.documentElement.clientWidth / 2;
-    const viewportCenterY   = window.innerHeight / 2;
-    const translateX        = viewportCenterX - cardCenterX;
-    const translateY        = viewportCenterY - cardCenterY;
-    const fullscreenScaleX  = document.documentElement.clientWidth / cardBoundingRect.width;
-    const fullscreenScaleY  = window.innerHeight / cardBoundingRect.height;
+    // 2. Scroll — built lazily at reveal, never on mount. While the loader plays the
+    //    page is locked at the top, but the binding must not exist at all: if this
+    //    pinned/scrubbed trigger were live during the intro, a restored or stray
+    //    scroll would drive the sun's scale/translate while it's still flying in.
+    //    Creating it here (after the sun lands) also means it measures final layout.
+    let scrollTimeline: ReturnType<typeof gsap.timeline> | null = null;
+    const createScrollExpansion = () => {
+      // The black square expands to fill the viewport while the sun layer translates
+      // to centre and grows to 2×. The sun layer only owns its outer transform here;
+      // the intro owns the inner ".hero-sun-flight".
+      const cardBoundingRect  = measureCardLayout(heroCardElement);
+      const cardCenterX       = cardBoundingRect.left + cardBoundingRect.width  / 2;
+      const cardCenterY       = cardBoundingRect.top  + cardBoundingRect.height / 2;
+      const viewportCenterX   = document.documentElement.clientWidth / 2;
+      const viewportCenterY   = window.innerHeight / 2;
+      const translateX        = viewportCenterX - cardCenterX;
+      const translateY        = viewportCenterY - cardCenterY;
+      const fullscreenScaleX  = document.documentElement.clientWidth / cardBoundingRect.width;
+      const fullscreenScaleY  = window.innerHeight / cardBoundingRect.height;
 
-    const scrollTimeline = gsap.timeline({
-      scrollTrigger: {
-        trigger:       heroSection,
-        start:         'top top',
-        end:           SCROLL_END,
-        pin:           true,
-        scrub:         SCROLL_SCRUB,
-        anticipatePin: 1,
-      },
-    });
+      scrollTimeline = gsap.timeline({
+        scrollTrigger: {
+          trigger:       heroSection,
+          start:         'top top',
+          end:           SCROLL_END,
+          pin:           true,
+          scrub:         SCROLL_SCRUB,
+          anticipatePin: 1,
+        },
+      });
 
-    scrollTimeline.to(heroCardElement, {
-      x:            translateX,
-      y:            translateY,
-      scaleX:       fullscreenScaleX,
-      scaleY:       fullscreenScaleY,
-      borderRadius: 0,
-      ease:         'power1.inOut',
-      duration:     1,
-    }, 0);
-
-    if (sunLayer) {
-      scrollTimeline.to(sunLayer, {
-        x:        translateX,
-        y:        translateY,
-        scale:    SUN_SCROLL_SCALE,
-        ease:     'power1.inOut',
-        duration: 1,
+      scrollTimeline.to(heroCardElement, {
+        x:            translateX,
+        y:            translateY,
+        scaleX:       fullscreenScaleX,
+        scaleY:       fullscreenScaleY,
+        borderRadius: 0,
+        ease:         'power1.inOut',
+        duration:     1,
       }, 0);
-    }
 
-    // 3. Reveal — fired once, when the intro lands the sun in the square.
+      if (sunLayer) {
+        scrollTimeline.to(sunLayer, {
+          x:        translateX,
+          y:        translateY,
+          scale:    SUN_SCROLL_SCALE,
+          ease:     'power1.inOut',
+          duration: 1,
+        }, 0);
+      }
+    };
+
+    // 3. Reveal — fired once, when the intro lands the sun in the square. This is also
+    //    the moment the scroll-expansion is allowed to come online (see Contract 2).
     let hasRevealed = false;
     const runReveal = () => {
       if (hasRevealed) return;
       hasRevealed = true;
+
+      createScrollExpansion();
 
       if (prefersReducedMotion()) {
         gsap.set(textInners, { yPercent: 0 });
@@ -141,8 +152,8 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
     return () => {
       window.removeEventListener(REVEAL_EVENT, runReveal);
       window.clearTimeout(fallbackTimeout);
-      scrollTimeline.scrollTrigger?.kill();
-      scrollTimeline.kill();
+      scrollTimeline?.scrollTrigger?.kill();
+      scrollTimeline?.kill();
     };
   }, []);
 }

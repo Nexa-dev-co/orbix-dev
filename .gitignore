@@ -26,3 +26,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Raw, pre-compression source models (optimized copies live in public/models)
+models-src/

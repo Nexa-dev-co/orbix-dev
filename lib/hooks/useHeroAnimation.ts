@@ -9,7 +9,8 @@ gsap.registerPlugin(ScrollTrigger);
 // ── Scroll expansion ───────────────────────────────────────────────────
 const SCROLL_SCRUB = 1.8;
 const SCROLL_END    = '+=220%';
-const SUN_SCROLL_SCALE = 2; // the sun grows to 2× as the black square fills the viewport
+const SUN_SCROLL_SCALE = 1.5; // the sun grows to 1.5× as the black square fills the viewport
+const SUN_SCROLL_RISE  = 120; // px the sun lifts above the square's centre at full scroll
 
 // ── Reveal (runs when the intro lands the sun in the square) ───────────
 const TEXT_WIPE_DURATION   = 0.9;
@@ -107,7 +108,7 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
       if (sunLayer) {
         scrollTimeline.to(sunLayer, {
           x:        translateX,
-          y:        translateY,
+          y:        translateY - SUN_SCROLL_RISE, // sits above the square's centre
           scale:    SUN_SCROLL_SCALE,
           ease:     'power1.inOut',
           duration: 1,

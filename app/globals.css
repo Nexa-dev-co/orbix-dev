@@ -864,6 +864,303 @@ body {
   }
 }
 
+/* ─── Services Deck — the four-craft fleet (homepage) ────────────── */
+
+/* Full-viewport stage: WebGL fleet behind, DOM labels + detail overlaid.
+   The negative margin pulls the deck up by exactly one viewport so it overlaps the hero's
+   tail — the 100vh the fullscreen black square would otherwise scroll away empty. The deck
+   stays invisible across that overlap (driven by useDeckReveal), so the hero's fill reads
+   through it, then the fleet reveals on the black. Tune this value if the hero height or
+   pin distance changes. */
+.services-deck {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: 100vh;
+  margin-top: -100vh;
+  background: transparent;
+  overflow: hidden;
+}
+
+/* Solid black backdrop — GSAP fades it in on reveal (see useDeckReveal). Starts transparent
+   so the hero square's fill shows through during the overlap. */
+.deck-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--bg);
+  opacity: 0;
+}
+
+/* WebGL layer — full-bleed, above the backdrop, behind the overlay. The wrap itself stays
+   visible; its contents start hidden individually (ships via material opacity, glow via the
+   rule below), so the reveal can bring each in on its own beat. */
+.deck-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.deck-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Soft volumetric pool the fleet rests within, low and centred. Starts hidden; GSAP breathes
+   it in on reveal. */
+.deck-glow {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  width: 90vw;
+  max-width: 1100px;
+  height: 46vh;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 229, 255, 0.1) 0%,
+    rgba(0, 90, 130, 0.05) 36%,
+    transparent 70%
+  );
+  filter: blur(30px);
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Loading — ring + count while the four vessels stream in */
+.deck-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+}
+
+.deck-loading.is-visible {
+  opacity: 1;
+}
+
+.deck-loading-ring {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 229, 255, 0.18);
+  border-top-color: var(--accent);
+  animation: fleet-spin 0.9s linear infinite;
+}
+
+.deck-loading-label {
+  font-family: var(--font-dm-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(0, 229, 255, 0.6);
+}
+
+/* Overlay — header (intro + active detail) above, fleet columns filling below.
+   The overlay itself ignores the pointer; only the fleet row re-enables it. */
+.deck-overlay {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100vh;
+  padding: clamp(92px, 12vh, 140px) clamp(24px, 5vw, 80px) clamp(28px, 5vh, 52px);
+  pointer-events: none;
+}
+
+.deck-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: clamp(24px, 5vw, 80px);
+}
+
+.deck-head-intro {
+  max-width: 460px;
+}
+
+.deck-title {
+  margin-top: 16px;
+  font-weight: 800;
+  font-size: clamp(2rem, 4.4vw, 3.6rem);
+  line-height: 1.03;
+  letter-spacing: -0.03em;
+  color: var(--fg);
+}
+
+/* Active-craft detail — top-right, the "empty area" of the composition. Re-mounts on
+   selection (keyed in JSX), so it re-reveals each time. */
+.deck-detail {
+  max-width: 34ch;
+  text-align: left;
+  animation: deck-detail-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.deck-detail-eyebrow {
+  font-weight: 700;
+  font-size: clamp(1rem, 1.5vw, 1.3rem);
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.deck-detail-copy {
+  margin-bottom: 18px;
+  font-size: clamp(0.82rem, 1vw, 0.92rem);
+  line-height: 1.75;
+  color: rgba(235, 232, 224, 0.7);
+}
+
+.deck-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+}
+
+.deck-detail-tag {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(235, 232, 224, 0.02);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(235, 232, 224, 0.6);
+}
+
+@keyframes deck-detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Fleet row — four equal columns aligned with the ships behind. Each column is a single
+   button covering its ship's strip and ending in that ship's label; this is the deck's
+   only interactive zone. */
+.deck-fleet {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: end;
+  pointer-events: auto;
+}
+
+.deck-column {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.deck-column:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.deck-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding-bottom: 6px;
+}
+
+.deck-label-number {
+  font-family: var(--font-dm-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  transition: color 0.3s ease;
+}
+
+.deck-label-name {
+  font-weight: 700;
+  font-size: clamp(0.85rem, 1.15vw, 1.1rem);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  text-align: center;
+  color: rgba(235, 232, 224, 0.55);
+  transition: color 0.3s ease;
+}
+
+/* Thin cyan meter under each label — fills on hover, fully on active. */
+.deck-label-line {
+  position: relative;
+  width: 46px;
+  height: 1px;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.deck-label-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  box-shadow: 0 0 9px rgba(0, 229, 255, 0.65);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.deck-column.is-hovered .deck-label-name {
+  color: rgba(235, 232, 224, 0.9);
+}
+
+.deck-column.is-active .deck-label-name {
+  color: var(--fg);
+}
+
+.deck-column.is-active .deck-label-number {
+  color: var(--accent);
+}
+
+.deck-column.is-hovered .deck-label-line::after {
+  transform: scaleX(0.4);
+}
+
+.deck-column.is-active .deck-label-line::after {
+  transform: scaleX(1);
+}
+
+/* Stacked layout — intro + detail stack, labels stay a four-up row */
+@media (max-width: 820px) {
+  .deck-head {
+    flex-direction: column;
+  }
+
+  .deck-detail {
+    max-width: none;
+  }
+
+  .deck-label-name {
+    font-size: 0.78rem;
+  }
+}
+
 /* ─── Reduced motion ─────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

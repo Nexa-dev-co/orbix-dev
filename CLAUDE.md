@@ -650,6 +650,44 @@ anything that must wait for "site ready" should listen for it (with a fallback t
 
 ---
 
+## Navbar — entrance & per-section scroll meters
+
+The navbar (`components/layout/Navbar`) is two stacked fixed layers: `.nav-root` holds the
+text/links and uses `mix-blend-mode: difference` (auto-inverts against whatever scrolls
+under it); `.nav-accent` sits behind it holding everything that must stay brand-cyan (top
+line, logo orbital mark, the scroll meters) so the blend never turns it red.
+
+### Entrance (`useNavbarAnimation`)
+
+Plays on `REVEAL_EVENT` — in lockstep with the hero headline — not on mount (with a
+fallback timeout if the intro is bypassed). The items converge from four directions at
+once, set per item via `data-enter` on the `<li>`: Services `top`, Work `left`, Process
+`right`, Contact `bottom`. Logo scales/fades in, CTA slides from the right.
+
+### Per-section scroll meters (the cyan lines)
+
+The old single scroll-progress bar is replaced by one cyan meter per nav item plus one
+under the logo. Each meter is a faint always-on track with a fill that scales to its own
+section's scroll progress.
+
+How it's wired, so a section "just works" once built:
+
+1. The nav item carries `data-key="<key>"` (see `NAV_ITEMS` in `Navbar.tsx`); the logo's
+   meter uses the key `home`.
+2. The meter fill scales to `--nav-progress-<key>` (0..1), aliased through `--meter-progress`.
+3. **A section feeds its meter by setting `--nav-progress-<key>` on
+   `document.documentElement`** from its own ScrollTrigger `onUpdate` (`self.progress`).
+   The hero does this for `home` in `useHeroAnimation` — copy that pattern.
+4. `useNavbarAnimation` positions each meter under its item by measuring the live layout
+   (re-run on resize and once fonts are ready), so no manual coordinates are needed.
+
+Current keys: `home` → hero (wired). `work` / `process` / `contact` → their homepage
+sections (just set the var when those are built — no navbar changes needed). `services`
+points at a separate page (`/services`), so it has no scroll meter; treat its line as an
+active/hover state if you want one.
+
+---
+
 ## General Rules
 
 - No magic numbers. Named constants only — declare them at the top of the file, never inline.

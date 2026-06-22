@@ -86,6 +86,11 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
           pin:           true,
           scrub:         SCROLL_SCRUB,
           anticipatePin: 1,
+          // Feed the navbar's "home" meter (the logo's cyan line) with the hero's scroll
+          // progress. Each section drives its own --nav-progress-<key> the same way.
+          onUpdate: (self) => {
+            document.documentElement.style.setProperty('--nav-progress-home', String(self.progress));
+          },
         },
       });
 

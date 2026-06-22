@@ -1,14 +1,36 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, type CSSProperties } from 'react';
 import { useNavbarAnimation } from '@/lib/hooks/useNavbarAnimation';
 
+// `enter` drives the directional entrance (see useNavbarAnimation); `key` maps the item
+// to its scroll-progress meter and the CSS var its section feeds (--nav-progress-<key>).
 const NAV_ITEMS = [
-  { number: '01', label: 'Services', href: '/services' },
-  { number: '02', label: 'Work',     href: '#work'     },
-  { number: '03', label: 'Process',  href: '#process'  },
-  { number: '04', label: 'Contact',  href: '#contact'  },
+  { key: 'services', number: '01', label: 'Services', href: '/services', enter: 'top'    },
+  { key: 'work',     number: '02', label: 'Work',     href: '#work',     enter: 'left'   },
+  { key: 'process',  number: '03', label: 'Process',  href: '#process',  enter: 'right'  },
+  { key: 'contact',  number: '04', label: 'Contact',  href: '#contact',  enter: 'bottom' },
 ] as const;
+
+// The logo's meter tracks the hero ("home") section.
+const HOME_METER_KEY = 'home';
+const METER_KEYS = [HOME_METER_KEY, ...NAV_ITEMS.map((item) => item.key)];
+
+function LinkArrow() {
+  return (
+    <span className="nav-link-arrow" aria-hidden="true">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+        <path
+          d="M2.5 6.5h7M6.5 3.5l3 3-3 3"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
 
 function OrbitalMark() {
   return (
@@ -25,18 +47,19 @@ function OrbitalMark() {
 }
 
 export default function Navbar() {
-  const navRef         = useRef<HTMLElement>(null);
-  const accentRef      = useRef<HTMLDivElement>(null);
-  const progressBarRef = useRef<HTMLDivElement>(null);
+  const navRef    = useRef<HTMLElement>(null);
+  const accentRef = useRef<HTMLDivElement>(null);
+  const metersRef = useRef<HTMLDivElement>(null);
 
-  useNavbarAnimation({ navRef, accentRef, progressBarRef });
+  useNavbarAnimation({ navRef, accentRef, metersRef });
 
   return (
     <>
       {/* Cyan accent layer — sits behind the blended bar and renders normally, so the
-          brand cyan (top line, logo mark, progress bar) never gets inverted by the
-          difference blend on .nav-root. It mirrors the logo's layout so the cyan mark
-          lands exactly over the blended bar's transparent spacer. */}
+          brand cyan (top line, logo mark, the per-section meters) never gets inverted by
+          the difference blend on .nav-root. The meters are positioned over each item by
+          measurement (see useNavbarAnimation), and each fill reads the CSS var its
+          section feeds. */}
       <div ref={accentRef} className="nav-accent" aria-hidden="true">
         <div className="nav-accent-line" />
 
@@ -47,7 +70,18 @@ export default function Navbar() {
           <span className="nav-wordmark nav-ghost">ORBIX</span>
         </div>
 
-        <div ref={progressBarRef} className="nav-progress" />
+        {/* One cyan meter per section + one for the logo (home). JS sets each meter's
+            left/width to sit under its item; the fill scales to --nav-progress-<key>. */}
+        <div ref={metersRef} className="nav-meters">
+          {METER_KEYS.map((meterKey) => (
+            <span key={meterKey} className="nav-meter" data-meter={meterKey}>
+              <span
+                className="nav-meter-fill"
+                style={{ '--meter-progress': `var(--nav-progress-${meterKey}, 0)` } as CSSProperties}
+              />
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Blended bar — mix-blend-mode: difference inverts all of this against whatever
@@ -63,10 +97,13 @@ export default function Navbar() {
         <nav aria-label="Main navigation">
           <ul className="nav-items">
             {NAV_ITEMS.map((navItem) => (
-              <li key={navItem.href} className="nav-item">
-                <a href={navItem.href} className="nav-link">
-                  <span className="nav-link-number">{navItem.number}</span>
-                  <span className="nav-link-label">{navItem.label}</span>
+              <li key={navItem.href} className="nav-item" data-enter={navItem.enter}>
+                <a href={navItem.href} className="nav-link" data-key={navItem.key}>
+                  <span className="nav-link-text">
+                    <span className="nav-link-label">{navItem.label}</span>
+                    <span className="nav-link-number">{navItem.number}</span>
+                  </span>
+                  <LinkArrow />
                 </a>
               </li>
             ))}

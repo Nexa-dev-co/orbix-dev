@@ -203,11 +203,12 @@ body {
   }
 }
 
-/* Nav links */
+/* Nav links — oversized editorial labels with a superscript index. The cyan
+   per-section meter lives in .nav-accent (.nav-meter), positioned under each item. */
 .nav-items {
   display: flex;
   align-items: center;
-  gap: 36px;
+  gap: clamp(20px, 2.6vw, 46px);
   list-style: none;
 }
 
@@ -216,59 +217,69 @@ body {
 }
 
 .nav-link {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
   text-decoration: none;
   color: #fff;
-  position: relative;
-  padding-bottom: 3px;
+  /* room on the right so the hover arrow reveals without nudging neighbours */
+  padding: 6px 24px 6px 2px;
 }
 
-.nav-link-number {
-  font-size: 8px;
-  font-family: var(--font-dm-sans), sans-serif;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.4);
-  letter-spacing: 0.2em;
-  line-height: 1;
-  transition: color 0.25s ease;
+/* Label + index shift left together on hover to clear room for the arrow. */
+.nav-link-text {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 3px;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .nav-link-label {
-  font-size: 12.5px;
+  font-family: var(--font-syne), sans-serif;
+  font-weight: 700;
+  font-size: clamp(16px, 1.5vw, 21px);
+  letter-spacing: 0.005em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.82);
+  transition: color 0.3s ease;
+}
+
+.nav-link-number {
   font-family: var(--font-dm-sans), sans-serif;
   font-weight: 400;
-  letter-spacing: 0.03em;
-  color: rgba(255, 255, 255, 0.72);
+  font-size: 9px;
+  letter-spacing: 0.12em;
   line-height: 1;
-  transition: color 0.25s ease;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.3s ease;
 }
 
-.nav-link::after {
-  content: "";
+/* Arrow popup — hidden at rest, slides in from the left as the label clears it. */
+.nav-link-arrow {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: var(--accent);
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  right: 4px;
+  top: 50%;
+  display: inline-flex;
+  color: #fff;
+  opacity: 0;
+  transform: translate(-6px, -50%);
+  transition:
+    opacity 0.34s ease,
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.nav-link:hover::after {
-  transform: scaleX(1);
+.nav-link:hover .nav-link-text {
+  transform: translateX(-7px);
 }
-
-.nav-link:hover .nav-link-number {
-  color: var(--accent);
+.nav-link:hover .nav-link-arrow {
+  opacity: 1;
+  transform: translate(0, -50%);
 }
-
 .nav-link:hover .nav-link-label {
   color: #fff;
+}
+.nav-link:hover .nav-link-number {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* CTA */
@@ -359,21 +370,39 @@ body {
 }
 
 /* Scroll progress bar */
-.nav-progress {
+/* Per-section scroll meters. One sits under each nav item + one under the logo; JS sets
+   each meter's left/width to match its item (see useNavbarAnimation). The fill scales to
+   --meter-progress, which each meter aliases to its section's --nav-progress-<key> var
+   (fed by that section's own ScrollTrigger). They live here in the cyan accent layer so
+   the difference blend on .nav-root never turns them red. */
+.nav-meters {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  opacity: 0; /* GSAP fades these in after the entrance places the items */
+  pointer-events: none;
+}
+
+.nav-meter {
   position: absolute;
   bottom: 0;
   left: 0;
-  height: 1px;
-  width: 0%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--accent) 15%,
-    var(--accent) 85%,
-    transparent
-  );
-  pointer-events: none;
-  opacity: 0.55;
+  width: 0; /* set per-item in JS */
+  height: 2px;
+  overflow: hidden;
+  /* faint always-on track so every section reads as having its own line */
+  background: rgba(0, 229, 255, 0.14);
+}
+
+.nav-meter-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform: scaleX(var(--meter-progress, 0));
+  transform-origin: left center;
+  box-shadow: 0 0 8px 0 rgba(0, 229, 255, 0.5);
 }
 
 /* ─── Hero ───────────────────────────────────────────────────────── */

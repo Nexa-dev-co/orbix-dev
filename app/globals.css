@@ -892,13 +892,17 @@ body {
   opacity: 0;
 }
 
-/* WebGL layer — full-bleed, above the backdrop, behind the overlay. The wrap itself stays
-   visible; its contents start hidden individually (ships via material opacity, glow via the
-   rule below), so the reveal can bring each in on its own beat. */
+/* WebGL layer — full-bleed, above the backdrop, behind the overlay. Hidden until the reveal
+   (GSAP fades it in): the ground pool inside always renders, so leaving the wrap visible
+   would paint the dark stage over the hero while the deck overlaps it during the intro. The
+   ships inside still fade in individually on top of this (material opacity), and the glow has
+   its own fade below. */
 .deck-canvas-wrap {
   position: absolute;
   inset: 0;
   z-index: 1;
+  opacity: 0;
+  visibility: hidden;
 }
 
 .deck-canvas {

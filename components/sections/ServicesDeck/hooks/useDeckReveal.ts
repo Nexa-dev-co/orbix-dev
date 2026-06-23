@@ -33,11 +33,12 @@ const LABEL_DURATION    = 0.7;
 const LABEL_RISE        = 24;
 const LABEL_STAGGER     = 0.1;
 
-const BACKDROP_SELECTOR = '.deck-backdrop';
-const GLOW_SELECTOR     = '.deck-glow';
-const EYEBROW_SELECTOR  = '.deck-head .eyebrow';
-const TITLE_SELECTOR    = '.deck-title';
-const COLUMN_SELECTOR   = '.deck-column';
+const BACKDROP_SELECTOR    = '.deck-backdrop';
+const CANVAS_WRAP_SELECTOR = '.deck-canvas-wrap';
+const GLOW_SELECTOR        = '.deck-glow';
+const EYEBROW_SELECTOR     = '.deck-head .eyebrow';
+const TITLE_SELECTOR       = '.deck-title';
+const COLUMN_SELECTOR      = '.deck-column';
 
 export function useDeckReveal(sectionRef: RefObject<HTMLElement | null>) {
   useEffect(() => {
@@ -48,28 +49,26 @@ export function useDeckReveal(sectionRef: RefObject<HTMLElement | null>) {
     const eyebrow  = section.querySelector(EYEBROW_SELECTOR);
     const title    = section.querySelector(TITLE_SELECTOR);
     const columns  = Array.from(section.querySelectorAll(COLUMN_SELECTOR));
-
-    // Hide the elements present at mount. autoAlpha also drops visibility, so the dormant
-    // labels can't be hovered/clicked while the deck overlaps the hero. The glow lives in the
-    // dynamically-imported canvas (not here yet), so it starts hidden via CSS and is queried
-    // at reveal time instead.
-    gsap.set(backdrop, { autoAlpha: 0 });
-    gsap.set([eyebrow, title], { autoAlpha: 0, y: TEXT_RISE });
-    gsap.set(columns, { autoAlpha: 0, y: LABEL_RISE });
+    // The canvas wrapper + glow live in the dynamically-imported viewer, so they may not be
+    // mounted yet here; they start hidden via CSS and are queried again at reveal time.
 
     // Already revealed this session (a re-mount / HMR after the first reveal) — present the
     // deck straight away and re-signal the fleet, no trigger needed.
     if (deckHasRevealed) {
+      const canvasWrap = section.querySelector(CANVAS_WRAP_SELECTOR);
       const glow = section.querySelector(GLOW_SELECTOR);
-      gsap.set([backdrop, glow, eyebrow, title, ...columns].filter(Boolean), { autoAlpha: 1, y: 0 });
+      gsap.set([backdrop, canvasWrap, glow, eyebrow, title, ...columns].filter(Boolean), {
+        autoAlpha: 1,
+        y: 0,
+      });
       window.dispatchEvent(new Event(DECK_REVEAL_EVENT));
       return;
     }
 
     // Hide the elements present at mount. autoAlpha also drops visibility, so the dormant
-    // labels can't be hovered/clicked while the deck overlaps the hero. The glow lives in the
-    // dynamically-imported canvas (not here yet), so it starts hidden via CSS and is queried
-    // at reveal time instead.
+    // labels can't be hovered/clicked while the deck overlaps the hero, and — crucially — the
+    // whole canvas layer (its ground pool would otherwise render dark over the hero) stays
+    // hidden until the reveal.
     gsap.set(backdrop, { autoAlpha: 0 });
     gsap.set([eyebrow, title], { autoAlpha: 0, y: TEXT_RISE });
     gsap.set(columns, { autoAlpha: 0, y: LABEL_RISE });
@@ -77,18 +76,24 @@ export function useDeckReveal(sectionRef: RefObject<HTMLElement | null>) {
     const reveal = () => {
       deckHasRevealed = true;
 
+      const canvasWrap = section.querySelector(CANVAS_WRAP_SELECTOR);
       const glow = section.querySelector(GLOW_SELECTOR);
       // Signal the WebGL fleet to start its own staggered entrance alongside the DOM.
       window.dispatchEvent(new Event(DECK_REVEAL_EVENT));
 
       if (prefersReducedMotion()) {
-        gsap.set([backdrop, glow, eyebrow, title, ...columns].filter(Boolean), { autoAlpha: 1, y: 0 });
+        gsap.set([backdrop, canvasWrap, glow, eyebrow, title, ...columns].filter(Boolean), {
+          autoAlpha: 1,
+          y: 0,
+        });
         return;
       }
 
       const timeline = gsap.timeline();
-      // 1. The black backdrop pours in over the last sliver of the hero square.
+      // 1. The black backdrop pours in, and the fleet's stage (the canvas, with its ground
+      //    pool) comes up with it — the ships themselves stay hidden until their own stagger.
       timeline.to(backdrop, { autoAlpha: 1, duration: BACKDROP_DURATION, ease: 'power2.out' }, 0);
+      if (canvasWrap) timeline.to(canvasWrap, { autoAlpha: 1, duration: BACKDROP_DURATION, ease: 'power2.out' }, 0);
       // 2. The volumetric glow breathes in under the fleet.
       if (glow) timeline.to(glow, { autoAlpha: 1, duration: GLOW_DURATION, ease: 'power2.out' }, 0.1);
       // 3. Eyebrow, then title, rise out of the black.

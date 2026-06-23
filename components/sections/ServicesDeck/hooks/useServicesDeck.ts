@@ -6,80 +6,91 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import gsap from 'gsap';
 import { prefersReducedMotion } from '@/lib/prefersReducedMotion';
 import { DECK_SERVICES } from '../deckServices';
-import { DECK_REVEAL_EVENT, deckIsRevealed } from './useDeckReveal';
+import { DECK_REVEAL_EVENT } from './useDeckCarousel';
 
 // ── Framing ─────────────────────────────────────────────────────────────
 const CAMERA_FOV      = 34;
 const CAMERA_DISTANCE = 8.2;
 const CAMERA_HEIGHT   = 1.7;
-const CAMERA_LOOK_Y   = 0.75; // look slightly down onto the deck so ships read as "landed"
+const CAMERA_LOOK_Y   = 0.75; // look slightly down onto the pad so the craft reads as "landed"
 
-// ── Ground ──────────────────────────────────────────────────────────────
-const GROUND_Y          = 0;    // ships rest with their base on this plane
-const GROUND_SIZE       = 40;
-const GROUND_TEXTURE_PX = 512;  // radial gradient that fades the floor pool into the dark
+// ── Landing pad ─────────────────────────────────────────────────────────
+const GROUND_Y          = 0;   // the pad's top surface sits here; the craft hovers just above it
+const PAD_MODEL_PATH     = '/models/space_landing.glb';
+const PAD_TARGET_WIDTH   = 5.0; // largest horizontal dimension the pad is normalised to
+const PAD_Y_OFFSET       = 0.6; // raise the pad so its platform surface comes up under the craft
+                                // (the model's bounding box is taller than the visible deck)
+// Recolour the pad to fit the scene — a dark slate body with a faint cyan glow in its recesses.
+// PAD_COLOR multiplies the model's texture (detail stays; hue shifts); tune these to taste.
+const PAD_COLOR              = 0x16222b;
+const PAD_EMISSIVE_COLOR     = 0x0b3a45;
+const PAD_EMISSIVE_INTENSITY = 0.55;
+
+// ── Starfield ───────────────────────────────────────────────────────────
+const STAR_COUNT         = 1200;
+const STAR_INNER_RADIUS  = 18;  // a spherical shell so stars wrap the scene without crowding the pad
+const STAR_OUTER_RADIUS  = 60;
+const STAR_SIZE          = 0.16;
+const STAR_OPACITY       = 0.85;
+const STAR_DRIFT         = 0.006; // radians/second of slow yaw so the field breathes
 
 // ── Fleet ───────────────────────────────────────────────────────────────
 const DRACO_DECODER_PATH = '/draco/';
-const TARGET_SIZE = 1.7;  // largest dimension every vessel is normalised to
-const SHIP_DEPTH  = 0;    // all craft sit on the z = 0 plane
+const TARGET_SIZE = 2.3;  // largest dimension every vessel is normalised to
 const BASE_YAW    = -0.6; // resting 3/4 view so hulls don't read flat-on
+const SHIP_HOVER  = 0.05; // resting height the centred craft sits above the pad (was floating high)
+const FLOAT_AMPLITUDE = 0.06; // gentle hover bob on the centred craft
+const FLOAT_SPEED     = 1.1;
 
-// ── Contact shadow ──────────────────────────────────────────────────────
+// ── Contact shadow (one soft blob on the pad, under the centred craft) ──
 const SHADOW_TEXTURE_PX = 256;
-const SHADOW_SCALE      = 1.5;   // shadow footprint relative to the hull's footprint
-const SHADOW_OPACITY    = 0.6;
-const SHADOW_LIFT       = 0.004; // nudge above the ground to avoid z-fighting
+const SHADOW_SIZE       = 2.2;
+const SHADOW_OPACITY    = 0.5;
+const SHADOW_LIFT       = 0.01; // nudge above the pad to avoid z-fighting
 
-// ── Lighting (shared stage rig; per-ship engine lights ramp on hover/active) ──
-const KEY_LIGHT_COLOR      = 0xfff2e2; // warm key so the hulls read with their own colour, not washed cold
+// ── Lighting (shared stage rig; the centred craft is always powered) ──
+const KEY_LIGHT_COLOR      = 0xfff2e2; // warm key so the hull reads with its own colour, not washed cold
 const KEY_LIGHT_INTENSITY  = 2.6;      // stronger + directional → reveals the surface/normal detail
-const FILL_LIGHT_COLOR     = 0x9aa7bb; // neutral cool fill (was a strong blue that tinted everything)
+const FILL_LIGHT_COLOR     = 0x9aa7bb; // neutral cool fill
 const FILL_LIGHT_INTENSITY = 0.5;
-const RIM_LIGHT_COLOR      = 0x00e5ff; // Orbix cyan edge — kept as an accent, not a wash
+const RIM_LIGHT_COLOR      = 0x00e5ff; // Orbix cyan edge — an accent, not a wash
 const RIM_LIGHT_INTENSITY  = 0.7;
-const AMBIENT_INTENSITY    = 0.16;     // lower so the directional key carves out contrast/texture
+const AMBIENT_INTENSITY    = 0.16;     // low so the directional key carves out contrast/texture
 const ENV_MAP_INTENSITY    = 1.2;      // a touch more environment reflection so metal/panels read
 const TONE_MAPPING_EXPOSURE = 1.18;
 
 // ── Powered-on look ──
-// Each hull wears a two-colour fresnel mix (colorCore facing the camera → colorEdge at
-// grazing angles, per ship in deckServices) rather than a flat tint. The state changes only
-// the ship itself: the mix darkens when dormant and brightens when powered, and the model's
-// *internal* emissive ("lights inside the ship") ramps up. No external lamp touches the hull —
-// it stays lit from above by the shared key light.
+// Each hull wears a two-colour fresnel mix (colorCore facing the camera → colorEdge at grazing
+// angles, per ship in deckServices). The centred craft sits bright with its internal emissive on;
+// a craft leaving the pad dims back as it fades. No external lamp touches the hull — it stays lit
+// from above by the shared key light.
 const FRESNEL_POWER          = 2.2; // higher → the edge colour hugs the silhouette more tightly
-const DORMANT_BRIGHTNESS     = 0.5; // hull multiplier when off (dark)
-const ACTIVE_BRIGHTNESS      = 1.2; // hull multiplier when fully powered (bright)
-const LIT_EMISSIVE_INTENSITY = 1.3; // the model's own internal lights when on
-const LIGHT_RAMP_DURATION    = 0.5; // seconds to fade between dormant and active
+const DORMANT_BRIGHTNESS     = 0.5; // hull multiplier as a craft leaves the pad (dim)
+const ACTIVE_BRIGHTNESS      = 1.2; // hull multiplier on the centred craft (bright)
+const LIT_EMISSIVE_INTENSITY = 1.3; // the model's own internal lights when centred
 
-// ── Activation (the clicked ship powers up; the others recede) ──
-const FORWARD_STEP          = 1.1;  // active ship eases toward the camera
-const ACTIVE_SCALE          = 1.12; // and grows a touch for emphasis
-const ACTIVE_LIFT           = 0.35; // rises off the deck
-const DIM_PRESENCE          = 0.32; // the rest fade toward the black backdrop
-const ACTIVE_TWEEN_DURATION = 0.7;
-const FLOAT_AMPLITUDE       = 0.06; // gentle hover bob while active
-const FLOAT_SPEED           = 1.1;
-const MOUSE_TRACK_YAW       = 0.5;  // radians the active ship yaws toward the pointer
-const MOUSE_TRACK_PITCH     = 0.28;
-const POINTER_EASE          = 0.06;
+// ── Carousel swap (single pad: the current craft flies off, THEN the next flies on) ──
+// The two halves are sequenced — the outgoing craft fully clears the pad before the incoming one
+// arrives — so they never overlap/clip through each other at centre. Each banks + warps in scale
+// for a more cinematic hand-off.
+const SWAP_OUT_DURATION = 0.5;  // the leaving craft's exit
+const SWAP_GAP          = 0.06; // empty beat on the pad between the two
+const SWAP_IN_DURATION  = 0.62; // the arriving craft's entrance
+const SWAP_OFFSET_X     = 3.6;  // how far to the side a craft sits while off-stage
+const SWAP_OFFSET_Y     = 0.55; // lift as it leaves / arrives so it arcs rather than slides flat
+const SWAP_BANK         = 0.5;  // radians the craft rolls (banks) as it slides off / in
+const SWAP_ENTER_SCALE  = 0.6;  // the craft warps in from this scale
+const SWAP_EXIT_SCALE   = 0.7;  // and shrinks to this as it leaves
 
-// ── Entrance (replays every time the deck scrolls into view; each hull has its own move) ──
-const SHIP_REVEAL_DURATION = 1.6;  // slower, more cinematic arrival
-const SHIP_REVEAL_STAGGER  = 0.28; // seconds between each hull starting its move
-
-// Per-ship intro start offsets (index-matched to DECK_SERVICES). Each hull begins here and
-// eases back to rest (0,0,0 / no turn / full scale) as it fades in.
-const SHIP_INTROS = [
-  { x: -2.6, y: 0.4, z: 0, rotationY: 0, scale: 1 },    // 01 Web — glides in from the left
-  { x: 0, y: 2.0, z: 0, rotationY: 0, scale: 1 },        // 02 Mobile — drops in from above
-  { x: 0, y: 0, z: -1.6, rotationY: 0, scale: 0.35 },    // 03 Enterprise — surges up from depth, scaling in
-  { x: 2.6, y: 0.4, z: 0, rotationY: -1.0, scale: 1 },   // 04 AI — banks in from the right with a turn
-];
-
-const DECK_COLUMN_SELECTOR = '.deck-column';
+// ── Drag-to-rotate + flick (replaces the old passive mouse-track) ──
+// A small drag on the craft rotates it (springs back on release); a big horizontal flick switches
+// the carousel via onFlick. Distances are in CSS pixels of pointer travel.
+const DRAG_YAW_SENSITIVITY   = 0.006; // radians of yaw per pixel dragged
+const DRAG_PITCH_SENSITIVITY = 0.004;
+const DRAG_YAW_CLAMP         = 1.0;   // most the craft can be turned by a drag
+const DRAG_PITCH_CLAMP       = 0.45;
+const SPRING_DURATION        = 0.9;   // ease back to the resting view on release
+const FLICK_DISTANCE_PX      = 110;   // horizontal travel past this (and horizontally dominant) = a switch
 
 export interface DeckStatus {
   isLoading: boolean;
@@ -89,67 +100,36 @@ export interface DeckStatus {
 
 interface DeckOptions {
   canvasRef: RefObject<HTMLCanvasElement | null>;
-  /** Index of the powered-on craft, or null. Read live from the render loop. */
-  activeIndex: number | null;
-  /** Index of the craft under the pointer, or null. Read live from the render loop. */
-  hoverIndex: number | null;
+  /** Index of the craft currently on the pad. Read live from the render loop / handlers. */
+  activeIndex: number;
+  /** A horizontal flick on the craft asks to switch: +1 = next, -1 = previous. */
+  onFlick: (direction: number) => void;
   onStatus: (status: DeckStatus) => void;
 }
 
-/** One craft's nested rig. slot → lift → spin → vessel lets each transform stay
- *  independent: slot owns X (column) + Z (forward step), lift owns the hover height,
- *  spin owns yaw/pitch (base view + mouse tracking). */
+/** One craft's nested rig. stage → lift → spin → vessel lets each transform stay independent:
+ *  stage owns the carousel fly-on/off, lift owns the hover height + float bob, spin owns yaw/pitch
+ *  (base view + drag rotation). */
 interface DeckShip {
-  slot: THREE.Group;
-  /** Entrance-only transform layer (slot → intro → lift → spin); animated solely by the
-   *  intro so it never fights the render loop's float / mouse-track on lift + spin. */
-  intro: THREE.Group;
+  stage: THREE.Group;
   lift: THREE.Group;
   spin: THREE.Group;
   materials: THREE.Material[];
-  shadow: THREE.Mesh | null;
   /** The hull's two mix colours (core → edge), applied as a fresnel blend in the shader. */
   colorCore: THREE.Color;
   colorEdge: THREE.Color;
-  /** 0 = dormant, 1 = fully lit. GSAP tweens this; applyLitState pushes it to brightness + emissive. */
+  /** 0 = dim (leaving), 1 = fully powered (centred). GSAP tweens this → brightness + emissive. */
   litState: { value: number };
-  /** 1 = full, DIM_PRESENCE = dimmed. GSAP tweens this; applyOpacity folds it into opacity. */
-  presenceState: { value: number };
-  /** 0 = not yet entered, 1 = fully arrived. GSAP tweens this on reveal; folded into opacity. */
-  revealState: { value: number };
-  /** Resting lift height (GSAP tweens it); the render loop adds the float bob on top. */
-  liftBase: { value: number };
+  /** 0 = off-stage/invisible, 1 = on the pad. GSAP tweens this → material opacity. */
+  presence: { value: number };
 }
 
 interface PreparedVessel {
   group: THREE.Group;
   materials: THREE.Material[];
-  /** Largest horizontal dimension after scaling — used to size the contact shadow. */
-  footprint: number;
 }
 
-// Soft radial pool painted to a canvas → the ground fades from a faint lit centre into
-// the page black, giving the fleet a surface to sit on without a hard plane edge.
-function createGroundTexture(): THREE.Texture {
-  const textureCanvas = document.createElement('canvas');
-  textureCanvas.width = GROUND_TEXTURE_PX;
-  textureCanvas.height = GROUND_TEXTURE_PX;
-  const context = textureCanvas.getContext('2d');
-  if (context) {
-    const center = GROUND_TEXTURE_PX / 2;
-    const gradient = context.createRadialGradient(center, center, 0, center, center, center);
-    gradient.addColorStop(0, 'rgba(40, 52, 60, 1)');
-    gradient.addColorStop(0.55, 'rgba(14, 18, 22, 1)');
-    gradient.addColorStop(1, 'rgba(6, 6, 6, 1)');
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, GROUND_TEXTURE_PX, GROUND_TEXTURE_PX);
-  }
-  const texture = new THREE.CanvasTexture(textureCanvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-// Soft dark blob → the contact shadow each ship casts onto the deck.
+// Soft dark blob → the contact shadow the centred craft casts onto the pad.
 function createShadowTexture(): THREE.Texture {
   const textureCanvas = document.createElement('canvas');
   textureCanvas.width = SHADOW_TEXTURE_PX;
@@ -167,20 +147,43 @@ function createShadowTexture(): THREE.Texture {
   return new THREE.CanvasTexture(textureCanvas);
 }
 
+// A spherical shell of faint points wrapping the scene — the "stars in the section". Additive so
+// they glint against the black without lighting the pad.
+function createStarfield(): THREE.Points {
+  const positions = new Float32Array(STAR_COUNT * 3);
+  for (let starIndex = 0; starIndex < STAR_COUNT; starIndex += 1) {
+    // Random direction (uniform on the sphere) × a random radius within the shell.
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const radius = STAR_INNER_RADIUS + Math.random() * (STAR_OUTER_RADIUS - STAR_INNER_RADIUS);
+    positions[starIndex * 3]     = radius * Math.sin(phi) * Math.cos(theta);
+    positions[starIndex * 3 + 1] = radius * Math.cos(phi);
+    positions[starIndex * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: STAR_SIZE,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: STAR_OPACITY,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  return new THREE.Points(geometry, material);
+}
+
 function collectMaterials(root: THREE.Object3D): THREE.Material[] {
   const materials: THREE.Material[] = [];
   root.traverse((child) => {
     if (child instanceof THREE.Mesh) {
       const meshMaterials = Array.isArray(child.material) ? child.material : [child.material];
       for (const material of meshMaterials) {
-        // Transparency is needed for the entrance/exit fades; remember the design opacity.
+        // Transparency is needed for the swap fades; remember the design opacity.
         material.transparent = true;
         material.userData.baseOpacity = material.opacity;
-        // Dormant = engines dark. Remember the model's emissive strength so hover can ramp
-        // back up to it; zero it now so an unselected ship reads as powered-down.
         if (material instanceof THREE.MeshStandardMaterial) {
-          material.userData.baseEmissiveIntensity = material.emissiveIntensity;
-          material.emissiveIntensity = 0;
           // Let the environment read a little stronger so metal + painted panels show.
           material.envMapIntensity = ENV_MAP_INTENSITY;
         }
@@ -191,16 +194,16 @@ function collectMaterials(root: THREE.Object3D): THREE.Material[] {
   return materials;
 }
 
-// Patch a hull material so its base colour becomes a two-colour fresnel mix (colorCore where
-// the surface faces the camera → colorEdge at grazing angles) scaled by a brightness the
-// state drives. The brightness lives in a uniform object stored on userData so applyLitState
-// can animate it (dark when dormant, bright when powered) without recompiling.
+// Patch a hull material so its base colour becomes a two-colour fresnel mix (colorCore where the
+// surface faces the camera → colorEdge at grazing angles) scaled by a brightness the state drives.
+// The brightness lives in a uniform object on userData so applyLitState can animate it (dim when
+// leaving, bright when centred) without recompiling.
 function setupHullTint(
   material: THREE.MeshStandardMaterial,
   colorCore: THREE.Color,
   colorEdge: THREE.Color,
 ) {
-  const brightnessUniform = { value: DORMANT_BRIGHTNESS };
+  const brightnessUniform = { value: ACTIVE_BRIGHTNESS };
   material.userData.tintBrightness = brightnessUniform;
 
   material.onBeforeCompile = (shader) => {
@@ -218,8 +221,8 @@ function setupHullTint(
         uniform float uTintBrightness;
         uniform float uFresnelPower;`,
       )
-      // normal (view space) + vViewPosition are both available after this chunk; diffuseColor
-      // was set earlier in <color_fragment> and is still in scope for the lighting below.
+      // normal (view space) + vViewPosition are both available after this chunk; diffuseColor was
+      // set earlier in <color_fragment> and is still in scope for the lighting below.
       .replace(
         '#include <normal_fragment_begin>',
         `#include <normal_fragment_begin>
@@ -230,8 +233,8 @@ function setupHullTint(
   material.needsUpdate = true;
 }
 
-// Centre the model, scale so every hull reads at the same size, and rest its base on the
-// ground (origin at the base, not the centre) so a ship sits ON the deck at slot y = 0.
+// Centre the model, scale so every hull reads at the same size, and rest its base on y = 0 (origin
+// at the base, not the centre) so a craft sits ON the pad when its rig is at y = 0.
 function prepareVessel(loadedScene: THREE.Group): PreparedVessel {
   const boundingBox = new THREE.Box3().setFromObject(loadedScene);
   const size   = boundingBox.getSize(new THREE.Vector3());
@@ -244,28 +247,28 @@ function prepareVessel(loadedScene: THREE.Group): PreparedVessel {
   const inner = new THREE.Group();
   inner.scale.setScalar(normalisedScale);
   inner.add(loadedScene);
-  // Shift the (centred) hull up by half its scaled height so its base lands on the ground.
+  // Shift the (centred) hull up by half its scaled height so its base lands at y = 0.
   inner.position.y = (size.y * normalisedScale) / 2;
 
   const group = new THREE.Group();
   group.add(inner);
 
-  return {
-    group,
-    materials: collectMaterials(group),
-    footprint: Math.max(size.x, size.z) * normalisedScale,
-  };
+  return { group, materials: collectMaterials(group) };
 }
 
-export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }: DeckOptions) {
-  // The render loop and the lights/activation logic read the freshest selection through a
-  // ref, so the persistent setup effect never re-runs when a pick changes.
-  const selectionRef = useRef({ activeIndex, hoverIndex });
-  selectionRef.current = { activeIndex, hoverIndex };
+export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: DeckOptions) {
+  // The render loop and the swap logic read the freshest selection through a ref, so the
+  // persistent setup effect never re-runs when the carousel index changes.
+  const activeIndexRef = useRef(activeIndex);
+  activeIndexRef.current = activeIndex;
 
-  // Set up inside the persistent effect; called from the selection effect below so a
-  // hover/click re-tunes the existing scene instead of rebuilding it.
-  const applyShipStatesRef = useRef<() => void>(() => {});
+  // Latest onFlick, so the drag handlers (set up once) always call the current closure.
+  const onFlickRef = useRef(onFlick);
+  onFlickRef.current = onFlick;
+
+  // Set up inside the persistent effect; called from the selection effect below so an index
+  // change re-stages the existing scene instead of rebuilding it.
+  const setStageRef = useRef<(index: number) => void>(() => {});
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -276,8 +279,8 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
     // ── Renderer ──
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    // Neutral tone mapping holds the hull colours instead of desaturating highlights the way
-    // ACES does — the fleet read flat/grey under ACES.
+    // Neutral tone mapping holds the hull colours instead of desaturating highlights the way ACES
+    // does — the fleet read flat/grey under ACES.
     renderer.toneMapping = THREE.NeutralToneMapping;
     renderer.toneMappingExposure = TONE_MAPPING_EXPOSURE;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -292,7 +295,7 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
     const roomEnvironment = new RoomEnvironment();
     scene.environment = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
 
-    // Warm key + neutral fill + a cyan rim that traces each hull's edge.
+    // Warm key + neutral fill + a cyan rim that traces the hull's edge.
     const keyLight = new THREE.DirectionalLight(KEY_LIGHT_COLOR, KEY_LIGHT_INTENSITY);
     keyLight.position.set(4, 7, 5);
     const fillLight = new THREE.DirectionalLight(FILL_LIGHT_COLOR, FILL_LIGHT_INTENSITY);
@@ -301,222 +304,239 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
     rimLight.position.set(-3, 3, -6);
     scene.add(keyLight, fillLight, rimLight, new THREE.AmbientLight(0xffffff, AMBIENT_INTENSITY));
 
-    // ── Ground pool ──
-    const groundTexture  = createGroundTexture();
-    const groundMaterial = new THREE.MeshBasicMaterial({
-      map: groundTexture,
-      transparent: true,
-      depthWrite: false,
-    });
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE), groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = GROUND_Y;
-    scene.add(ground);
+    // ── Starfield ──
+    const starfield = createStarfield();
+    scene.add(starfield);
 
-    // ── Ship rigs (created empty up-front so layout + status work before models arrive) ──
+    // ── Contact shadow (one blob centred on the pad) ──
     const shadowTexture  = createShadowTexture();
-    const shadowGeometry = new THREE.PlaneGeometry(1, 1);
     const shadowMaterial = new THREE.MeshBasicMaterial({
       map: shadowTexture,
       transparent: true,
       opacity: SHADOW_OPACITY,
       depthWrite: false,
     });
+    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(SHADOW_SIZE, SHADOW_SIZE), shadowMaterial);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = GROUND_Y + SHADOW_LIFT;
+    scene.add(shadow);
 
+    // ── Ship rigs (created empty up-front so status works before models arrive) ──
     const ships: DeckShip[] = DECK_SERVICES.map((service) => {
-      const slot  = new THREE.Group();
-      const intro = new THREE.Group();
+      const stage = new THREE.Group();
       const lift  = new THREE.Group();
       const spin  = new THREE.Group();
       spin.rotation.y = BASE_YAW;
-      slot.position.z = SHIP_DEPTH;
+      lift.position.y = SHIP_HOVER;
       lift.add(spin);
-      intro.add(lift);
-      slot.add(intro);
-      scene.add(slot);
+      stage.add(lift);
+      scene.add(stage);
 
       return {
-        slot,
-        intro,
+        stage,
         lift,
         spin,
         materials: [],
-        shadow: null,
         colorCore: new THREE.Color(service.colorCore),
         colorEdge: new THREE.Color(service.colorEdge),
         litState: { value: 0 },
-        presenceState: { value: 1 },
-        revealState: { value: 0 },
-        liftBase: { value: 0 },
+        presence: { value: 0 },
       };
     });
 
     // Push a ship's lit value (0..1) onto its hull brightness + internal emissive strength.
-    // Nothing here lights the hull from outside — the colour mix is constant; the state just
-    // moves it from dark (dormant) to bright (powered) while its own emissive "lights" come up.
     const applyLitState = (ship: DeckShip) => {
-      const litValue = ship.litState.value;
-      const brightness = THREE.MathUtils.lerp(DORMANT_BRIGHTNESS, ACTIVE_BRIGHTNESS, litValue);
+      const brightness = THREE.MathUtils.lerp(DORMANT_BRIGHTNESS, ACTIVE_BRIGHTNESS, ship.litState.value);
       ship.materials.forEach((material) => {
         if (material instanceof THREE.MeshStandardMaterial) {
           const tintBrightness = material.userData.tintBrightness as { value: number } | undefined;
           if (tintBrightness) tintBrightness.value = brightness;
-          material.emissiveIntensity = litValue * LIT_EMISSIVE_INTENSITY;
+          material.emissiveIntensity = ship.litState.value * LIT_EMISSIVE_INTENSITY;
         }
       });
     };
 
-    // Fold a ship's presence (dim) and reveal (entrance) into its material opacity. Dimmed
-    // ships sink toward the black backdrop; un-entered ships are fully transparent.
+    // Fold a ship's presence (0 off-stage → 1 on the pad) into its material opacity.
     const applyOpacity = (ship: DeckShip) => {
-      const factor = ship.presenceState.value * ship.revealState.value;
       ship.materials.forEach((material) => {
         const baseOpacity = (material.userData.baseOpacity as number | undefined) ?? 1;
-        material.opacity = baseOpacity * factor;
+        material.opacity = baseOpacity * ship.presence.value;
       });
     };
 
-    // The fleet's entrance — fired by DECK_REVEAL_EVENT every time the deck scrolls into view.
-    // Each hull resets to its own intro start (instant), then eases in on its own beat, so the
-    // animation replays cleanly on re-entry.
-    const playReveal = () => {
+    // Snap a ship to its off-stage parked pose (invisible, waiting at the side).
+    const parkShip = (ship: DeckShip, fromX: number) => {
+      gsap.killTweensOf([ship.stage.position, ship.stage.rotation, ship.stage.scale, ship.presence, ship.litState]);
+      ship.stage.position.set(fromX, SWAP_OFFSET_Y, 0);
+      ship.stage.rotation.set(0, 0, 0);
+      ship.stage.scale.setScalar(1);
+      ship.presence.value = 0;
+      ship.litState.value = 0;
+      applyOpacity(ship);
+      applyLitState(ship);
+    };
+
+    // Which craft is currently staged. Initialised to the mount index so the first selection
+    // effect (same index) is a no-op rather than a phantom swap.
+    let stagedIndex = activeIndexRef.current;
+
+    // Warp a craft onto the pad: snap it off-stage (banked + shrunk, hidden) then ease it to centre.
+    // `delay` lets the swap hold it off until the outgoing craft has cleared.
+    const enterShip = (ship: DeckShip, direction: number, delay: number) => {
+      gsap.killTweensOf([ship.stage.position, ship.stage.rotation, ship.stage.scale, ship.presence, ship.litState]);
+      ship.stage.position.set(direction * SWAP_OFFSET_X, SWAP_OFFSET_Y, 0);
+      ship.stage.rotation.set(0, 0, direction * SWAP_BANK);
+      ship.stage.scale.setScalar(SWAP_ENTER_SCALE);
+      ship.spin.rotation.set(0, BASE_YAW, 0);
+      ship.presence.value = 0;
+      applyOpacity(ship);
+
+      gsap.to(ship.stage.position, {
+        x: 0, y: 0, z: 0, duration: SWAP_IN_DURATION, delay, ease: 'power3.out', overwrite: true,
+      });
+      gsap.to(ship.stage.rotation, {
+        z: 0, duration: SWAP_IN_DURATION, delay, ease: 'power3.out', overwrite: true,
+      });
+      gsap.to(ship.stage.scale, {
+        x: 1, y: 1, z: 1, duration: SWAP_IN_DURATION, delay, ease: 'back.out(1.5)', overwrite: true,
+      });
+      gsap.to(ship.presence, {
+        value: 1, duration: SWAP_IN_DURATION * 0.7, delay, ease: 'power2.out', overwrite: true,
+        onUpdate: () => applyOpacity(ship),
+      });
+      gsap.to(ship.litState, {
+        value: 1, duration: SWAP_IN_DURATION, delay, ease: 'power2.out', overwrite: true,
+        onUpdate: () => applyLitState(ship),
+      });
+    };
+
+    // Fly a craft off the pad toward the trailing side — banking, shrinking, dimming, fading.
+    const exitShip = (ship: DeckShip, direction: number) => {
+      gsap.killTweensOf([ship.stage.position, ship.stage.rotation, ship.stage.scale, ship.presence, ship.litState]);
+      gsap.to(ship.stage.position, {
+        x: -direction * SWAP_OFFSET_X, y: SWAP_OFFSET_Y, z: 0,
+        duration: SWAP_OUT_DURATION, ease: 'power3.in', overwrite: true,
+      });
+      gsap.to(ship.stage.rotation, {
+        z: -direction * SWAP_BANK, duration: SWAP_OUT_DURATION, ease: 'power2.in', overwrite: true,
+      });
+      gsap.to(ship.stage.scale, {
+        x: SWAP_EXIT_SCALE, y: SWAP_EXIT_SCALE, z: SWAP_EXIT_SCALE,
+        duration: SWAP_OUT_DURATION, ease: 'power2.in', overwrite: true,
+      });
+      gsap.to(ship.presence, {
+        value: 0, duration: SWAP_OUT_DURATION, ease: 'power2.in', overwrite: true,
+        onUpdate: () => applyOpacity(ship),
+      });
+      gsap.to(ship.litState, {
+        value: 0, duration: SWAP_OUT_DURATION, ease: 'power2.in', overwrite: true,
+        onUpdate: () => applyLitState(ship),
+      });
+    };
+
+    // Snap a craft straight onto the pad, no animation (reduced motion).
+    const snapToCenter = (ship: DeckShip) => {
+      gsap.killTweensOf([ship.stage.position, ship.stage.rotation, ship.stage.scale, ship.presence, ship.litState]);
+      ship.stage.position.set(0, 0, 0);
+      ship.stage.rotation.set(0, 0, 0);
+      ship.stage.scale.setScalar(1);
+      ship.spin.rotation.set(0, BASE_YAW, 0);
+      ship.presence.value = 1;
+      ship.litState.value = 1;
+      applyOpacity(ship);
+      applyLitState(ship);
+    };
+
+    // Fly the current craft off the pad and — once it has cleared — the next one on. Direction
+    // (+1 next / −1 prev) decides which side each enters/leaves from, so the swap reads as the
+    // carousel moving. The arrival is delayed past the exit so the two never collide at centre.
+    const enterDelay = SWAP_OUT_DURATION + SWAP_GAP;
+    const setStage = (nextIndex: number) => {
+      if (nextIndex === stagedIndex && ships[nextIndex]?.presence.value === 1) return;
+      const direction = nextIndex > stagedIndex ? 1 : -1;
+      const previousIndex = stagedIndex;
+      stagedIndex = nextIndex;
+
       ships.forEach((ship, index) => {
-        const introStart = SHIP_INTROS[index % SHIP_INTROS.length];
-
-        // Snap to the hidden start of this ship's move.
-        ship.revealState.value = 0;
-        applyOpacity(ship);
-        ship.intro.position.set(introStart.x, introStart.y, introStart.z);
-        ship.intro.rotation.y = introStart.rotationY;
-        ship.intro.scale.setScalar(introStart.scale);
-
+        const isCenter  = index === nextIndex;
+        const isLeaving = index === previousIndex && previousIndex !== nextIndex;
         if (reduceMotion) {
-          ship.revealState.value = 1;
-          applyOpacity(ship);
-          ship.intro.position.set(0, 0, 0);
-          ship.intro.rotation.y = 0;
-          ship.intro.scale.setScalar(1);
-          return;
-        }
-
-        const delay = index * SHIP_REVEAL_STAGGER;
-        gsap.to(ship.revealState, {
-          value: 1,
-          duration: SHIP_REVEAL_DURATION,
-          delay,
-          ease: 'power2.out',
-          overwrite: true,
-          onUpdate: () => applyOpacity(ship),
-        });
-        gsap.to(ship.intro.position, {
-          x: 0, y: 0, z: 0, duration: SHIP_REVEAL_DURATION, delay, ease: 'power3.out', overwrite: true,
-        });
-        gsap.to(ship.intro.rotation, {
-          y: 0, duration: SHIP_REVEAL_DURATION, delay, ease: 'power3.out', overwrite: true,
-        });
-        gsap.to(ship.intro.scale, {
-          x: 1, y: 1, z: 1, duration: SHIP_REVEAL_DURATION, delay, ease: 'back.out(1.3)', overwrite: true,
-        });
-      });
-    };
-
-    // Re-tune the whole fleet for the current hover + active selection:
-    //   lights  → on for the hovered or active ship
-    //   presence→ dim every ship that's neither, once one is powered up
-    //   motion  → only the active ship steps forward / lifts / grows (and only if motion is allowed)
-    const applyShipStates = () => {
-      const { activeIndex: active, hoverIndex: hovered } = selectionRef.current;
-      const somethingActive = active !== null;
-      ships.forEach((ship, index) => {
-        const isActive  = index === active;
-        const isHovered = index === hovered;
-
-        gsap.to(ship.litState, {
-          value: isActive || isHovered ? 1 : 0,
-          duration: LIGHT_RAMP_DURATION,
-          ease: 'power2.out',
-          overwrite: true,
-          onUpdate: () => applyLitState(ship),
-        });
-
-        const presenceTarget = !somethingActive || isActive || isHovered ? 1 : DIM_PRESENCE;
-        gsap.to(ship.presenceState, {
-          value: presenceTarget,
-          duration: ACTIVE_TWEEN_DURATION,
-          ease: 'power2.out',
-          overwrite: true,
-          onUpdate: () => applyOpacity(ship),
-        });
-
-        if (!reduceMotion) {
-          gsap.to(ship.slot.position, {
-            z: isActive ? FORWARD_STEP : 0,
-            duration: ACTIVE_TWEEN_DURATION,
-            ease: 'power3.out',
-            overwrite: true,
-          });
-          gsap.to(ship.liftBase, {
-            value: isActive ? ACTIVE_LIFT : 0,
-            duration: ACTIVE_TWEEN_DURATION,
-            ease: 'power3.out',
-            overwrite: true,
-          });
-          const scaleTarget = isActive ? ACTIVE_SCALE : 1;
-          gsap.to(ship.spin.scale, {
-            x: scaleTarget,
-            y: scaleTarget,
-            z: scaleTarget,
-            duration: ACTIVE_TWEEN_DURATION,
-            ease: 'power3.out',
-            overwrite: true,
-          });
-        }
-      });
-    };
-    applyShipStatesRef.current = applyShipStates;
-
-    // The deck's DOM reveal fires DECK_REVEAL_EVENT; play the fleet entrance in step. If the
-    // reveal already happened before this (dynamically-imported) canvas mounted, catch up.
-    window.addEventListener(DECK_REVEAL_EVENT, playReveal);
-    if (deckIsRevealed()) playReveal();
-
-    // Map a column's horizontal screen position to a world X on the ship plane, so each
-    // ship sits exactly under its DOM label regardless of layout padding / breakpoint.
-    const shipPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -SHIP_DEPTH);
-    const raycaster = new THREE.Raycaster();
-    const planeHit  = new THREE.Vector3();
-    const projectColumnToWorldX = (normalisedDeviceX: number): number => {
-      raycaster.setFromCamera(new THREE.Vector2(normalisedDeviceX, 0), camera);
-      const hit = raycaster.ray.intersectPlane(shipPlane, planeHit);
-      return hit ? hit.x : normalisedDeviceX * (GROUND_SIZE / 8);
-    };
-
-    const layoutShips = () => {
-      const width = canvas.clientWidth || canvas.offsetWidth;
-      if (!width) return;
-      const canvasRect = canvas.getBoundingClientRect();
-      const columns = document.querySelectorAll<HTMLElement>(DECK_COLUMN_SELECTOR);
-      ships.forEach((ship, index) => {
-        const column = columns[index];
-        let normalisedDeviceX: number;
-        if (column) {
-          const columnRect = column.getBoundingClientRect();
-          const centerX = columnRect.left + columnRect.width / 2 - canvasRect.left;
-          normalisedDeviceX = (centerX / width) * 2 - 1;
+          if (isCenter) snapToCenter(ship);
+          else parkShip(ship, direction * SWAP_OFFSET_X);
+        } else if (isCenter) {
+          enterShip(ship, direction, enterDelay);
+        } else if (isLeaving) {
+          exitShip(ship, direction);
         } else {
-          // Fallback: even quarters across the frame if the DOM isn't queryable yet.
-          normalisedDeviceX = ((index + 0.5) / ships.length) * 2 - 1;
+          parkShip(ship, direction * SWAP_OFFSET_X);
         }
-        ship.slot.position.x = projectColumnToWorldX(normalisedDeviceX);
       });
     };
+    setStageRef.current = setStage;
 
-    // ── Load the four vessels (Draco-compressed) ──
+    // Replay the whole entrance for the currently-staged craft — fired by DECK_REVEAL_EVENT every
+    // time the section scrolls back into view, so "scroll away then back" runs the animation again.
+    const replayEntrance = () => {
+      const index = activeIndexRef.current;
+      stagedIndex = index;
+      ships.forEach((ship, shipIndex) => {
+        if (shipIndex !== index) {
+          parkShip(ship, SWAP_OFFSET_X);
+        } else if (reduceMotion) {
+          snapToCenter(ship);
+        } else {
+          // Nothing is leaving, so it flies straight in (no exit delay).
+          enterShip(ship, 1, 0);
+        }
+      });
+    };
+    window.addEventListener(DECK_REVEAL_EVENT, replayEntrance);
+
+    // ── Load the landing pad (once) ──
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath(DRACO_DECODER_PATH);
     const gltfLoader = new GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);
 
+    let padGroup: THREE.Group | null = null;
+    gltfLoader.load(
+      PAD_MODEL_PATH,
+      (gltf) => {
+        const loadedScene = gltf.scene;
+        // Retint the pad to the scene palette.
+        loadedScene.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const padMaterials = Array.isArray(child.material) ? child.material : [child.material];
+            padMaterials.forEach((material) => {
+              if (material instanceof THREE.MeshStandardMaterial) {
+                material.color.set(PAD_COLOR);
+                material.emissive.set(PAD_EMISSIVE_COLOR);
+                material.emissiveIntensity = PAD_EMISSIVE_INTENSITY;
+                material.envMapIntensity = ENV_MAP_INTENSITY;
+              }
+            });
+          }
+        });
+        const boundingBox = new THREE.Box3().setFromObject(loadedScene);
+        const size   = boundingBox.getSize(new THREE.Vector3());
+        const center = boundingBox.getCenter(new THREE.Vector3());
+        loadedScene.position.sub(center);
+
+        const padScale = PAD_TARGET_WIDTH / (Math.max(size.x, size.z) || 1);
+        const scaledHeight = size.y * padScale;
+        const group = new THREE.Group();
+        group.scale.setScalar(padScale);
+        group.add(loadedScene);
+        // Align the pad's top with the ground so the craft hovers just above the surface.
+        group.position.y = GROUND_Y - scaledHeight / 2 + PAD_Y_OFFSET;
+        scene.add(group);
+        padGroup = group;
+      },
+      undefined,
+      (error) => console.error(`Failed to load landing pad: ${PAD_MODEL_PATH}`, error),
+    );
+
+    // ── Load the four vessels (Draco-compressed) ──
     const loadProgress = new Array(ships.length).fill(0);
     const emitStatus = () => {
       const isDone = loadProgress.every((value) => value >= 1);
@@ -533,26 +553,28 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
           const ship = ships[index];
           ship.spin.add(prepared.group);
           ship.materials = prepared.materials;
-          // Give every hull material its two-colour mix, then reflect the current
-          // hover/active/reveal state (brightness + emissive + opacity) on it.
+          // Give every hull material its two-colour mix, then reflect its current staged state.
           ship.materials.forEach((material) => {
             if (material instanceof THREE.MeshStandardMaterial) {
               setupHullTint(material, ship.colorCore, ship.colorEdge);
             }
           });
-          applyLitState(ship);
-          applyOpacity(ship);
 
-          const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
-          shadow.rotation.x = -Math.PI / 2;
-          shadow.position.y = GROUND_Y + SHADOW_LIFT;
-          const shadowSize = prepared.footprint * SHADOW_SCALE;
-          shadow.scale.set(shadowSize, shadowSize, 1);
-          ship.slot.add(shadow);
-          ship.shadow = shadow;
+          // The centred craft shows immediately; the rest wait off-stage. (Materials only exist
+          // now, so the initial pose has to be applied after the model arrives.)
+          if (index === stagedIndex) {
+            ship.stage.position.set(0, 0, 0);
+            ship.presence.value = 1;
+            ship.litState.value = 1;
+          } else {
+            ship.stage.position.set(SWAP_OFFSET_X, SWAP_OFFSET_Y, 0);
+            ship.presence.value = 0;
+            ship.litState.value = 0;
+          }
+          applyOpacity(ship);
+          applyLitState(ship);
 
           loadProgress[index] = 1;
-          layoutShips();
           emitStatus();
         },
         (progressEvent) => {
@@ -569,14 +591,63 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
       );
     });
 
-    // ── Pointer (the active ship yaws/pitches toward the cursor) ──
-    const pointerTarget  = { x: 0, y: 0 };
-    const pointerCurrent = { x: 0, y: 0 };
-    const handlePointerMove = (event: PointerEvent) => {
-      pointerTarget.x = (event.clientX / window.innerWidth  - 0.5) * 2;
-      pointerTarget.y = (event.clientY / window.innerHeight - 0.5) * 2;
+    // ── Drag-to-rotate + flick ──
+    // Pointer down on the canvas grabs the centred craft. Dragging rotates it; on release a big
+    // horizontal travel is read as a flick (switch carousel), otherwise the craft springs back.
+    const drag = { active: false, startX: 0, startY: 0, startTime: 0 };
+
+    const activeShip = () => ships[activeIndexRef.current];
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (reduceMotion) return;
+      drag.active = true;
+      drag.startX = event.clientX;
+      drag.startY = event.clientY;
+      drag.startTime = performance.now();
+      const ship = activeShip();
+      if (ship) gsap.killTweensOf(ship.spin.rotation);
+      canvas.setPointerCapture?.(event.pointerId);
     };
-    if (!reduceMotion) window.addEventListener('pointermove', handlePointerMove);
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!drag.active) return;
+      const ship = activeShip();
+      if (!ship) return;
+      const deltaX = event.clientX - drag.startX;
+      const deltaY = event.clientY - drag.startY;
+      ship.spin.rotation.y = BASE_YAW + THREE.MathUtils.clamp(
+        deltaX * DRAG_YAW_SENSITIVITY, -DRAG_YAW_CLAMP, DRAG_YAW_CLAMP,
+      );
+      ship.spin.rotation.x = THREE.MathUtils.clamp(
+        deltaY * DRAG_PITCH_SENSITIVITY, -DRAG_PITCH_CLAMP, DRAG_PITCH_CLAMP,
+      );
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (!drag.active) return;
+      drag.active = false;
+      canvas.releasePointerCapture?.(event.pointerId);
+
+      const totalX = event.clientX - drag.startX;
+      const totalY = event.clientY - drag.startY;
+      const isFlick = Math.abs(totalX) > FLICK_DISTANCE_PX && Math.abs(totalX) > Math.abs(totalY);
+
+      // Always ease the craft back to its resting view; if it was a flick, also ask to switch.
+      const ship = activeShip();
+      if (ship) {
+        gsap.to(ship.spin.rotation, {
+          x: 0, y: BASE_YAW, duration: SPRING_DURATION, ease: 'elastic.out(1, 0.5)', overwrite: true,
+        });
+      }
+      if (isFlick) {
+        // Dragging the craft left pushes it away → reveal the next craft (and vice-versa).
+        onFlickRef.current(totalX < 0 ? 1 : -1);
+      }
+    };
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
 
     // ── Render loop ──
     const clock = new THREE.Clock();
@@ -584,22 +655,15 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
     const renderFrame = () => {
       frameId = requestAnimationFrame(renderFrame);
 
-      if (!reduceMotion) {
-        const elapsed = clock.getElapsedTime();
-        const activeShipIndex = selectionRef.current.activeIndex;
-        pointerCurrent.x += (pointerTarget.x - pointerCurrent.x) * POINTER_EASE;
-        pointerCurrent.y += (pointerTarget.y - pointerCurrent.y) * POINTER_EASE;
+      const elapsed = clock.getElapsedTime();
+      starfield.rotation.y = elapsed * STAR_DRIFT;
 
+      if (!reduceMotion) {
+        const centred = activeIndexRef.current;
         ships.forEach((ship, index) => {
-          const isActive = index === activeShipIndex;
-          // Resting lift (GSAP) + a gentle float bob while active.
-          const floatOffset = isActive ? Math.sin(elapsed * FLOAT_SPEED) * FLOAT_AMPLITUDE : 0;
-          ship.lift.position.y = ship.liftBase.value + floatOffset;
-          // Active ship tracks the cursor; the rest ease back to their resting 3/4 view.
-          const targetYaw   = isActive ? BASE_YAW + pointerCurrent.x * MOUSE_TRACK_YAW : BASE_YAW;
-          const targetPitch = isActive ? pointerCurrent.y * MOUSE_TRACK_PITCH : 0;
-          ship.spin.rotation.y += (targetYaw   - ship.spin.rotation.y) * POINTER_EASE;
-          ship.spin.rotation.x += (targetPitch - ship.spin.rotation.x) * POINTER_EASE;
+          // Only the centred craft gets the gentle float bob; the rest rest flat.
+          const floatOffset = index === centred ? Math.sin(elapsed * FLOAT_SPEED) * FLOAT_AMPLITUDE : 0;
+          ship.lift.position.y = SHIP_HOVER + floatOffset;
         });
       }
 
@@ -615,7 +679,6 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
-      layoutShips();
     };
     handleResize();
     const resizeObserver = new ResizeObserver(handleResize);
@@ -624,19 +687,18 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
     return () => {
       cancelAnimationFrame(frameId);
       resizeObserver.disconnect();
+      canvas.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener(DECK_REVEAL_EVENT, playReveal);
-      // Dispose every loaded hull's geometry + materials, and stop any running tweens.
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener(DECK_REVEAL_EVENT, replayEntrance);
+      // Stop any running tweens, then dispose every loaded hull's geometry + materials.
       ships.forEach((ship) => {
         gsap.killTweensOf(ship.litState);
-        gsap.killTweensOf(ship.presenceState);
-        gsap.killTweensOf(ship.revealState);
-        gsap.killTweensOf(ship.liftBase);
-        gsap.killTweensOf(ship.slot.position);
-        gsap.killTweensOf(ship.spin.scale);
-        gsap.killTweensOf(ship.intro.position);
-        gsap.killTweensOf(ship.intro.rotation);
-        gsap.killTweensOf(ship.intro.scale);
+        gsap.killTweensOf(ship.presence);
+        gsap.killTweensOf(ship.stage.position);
+        gsap.killTweensOf(ship.stage.rotation);
+        gsap.killTweensOf(ship.stage.scale);
+        gsap.killTweensOf(ship.spin.rotation);
         ship.spin.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             child.geometry.dispose();
@@ -645,23 +707,29 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
           }
         });
       });
+      padGroup?.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          const meshMaterials = Array.isArray(child.material) ? child.material : [child.material];
+          meshMaterials.forEach((material) => material.dispose());
+        }
+      });
       dracoLoader.dispose();
-      shadowGeometry.dispose();
+      shadow.geometry.dispose();
       shadowMaterial.dispose();
       shadowTexture.dispose();
+      starfield.geometry.dispose();
+      (starfield.material as THREE.Material).dispose();
       pmremGenerator.dispose();
       scene.environment?.dispose();
-      groundTexture.dispose();
-      groundMaterial.dispose();
-      ground.geometry.dispose();
       renderer.dispose();
     };
-    // Setup runs once; selection changes are read live via selectionRef.
+    // Setup runs once; selection changes are read live via activeIndexRef.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // React to hover / active changes: re-tune the existing scene (lights now, motion later).
+  // React to carousel index changes: re-stage the existing scene (fly current off, next on).
   useEffect(() => {
-    applyShipStatesRef.current();
-  }, [activeIndex, hoverIndex]);
+    setStageRef.current(activeIndex);
+  }, [activeIndex]);
 }

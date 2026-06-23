@@ -6,11 +6,11 @@
 // surfaces stay in one voice; only the short display `name` differs here.
 
 // Model → service assignment. Each ship is one line — swap a path to reassign a
-// vessel. episode_77_-_spaceship.glb is held spare (five models, four bays).
+// vessel. The carousel shows one craft at a time, so every bay gets a distinct hull.
 const WEB_VESSEL        = '/models/spaceship.glb';
-const MOBILE_VESSEL     = '/models/helicopter_space_ship.glb';
-const ENTERPRISE_VESSEL = '/models/spaceship2.glb';
-const AI_VESSEL         = '/models/ship_lkj.glb';
+const MOBILE_VESSEL     = '/models/spaceship3.glb';
+const ENTERPRISE_VESSEL = '/models/cargo_spaceship.glb';
+const AI_VESSEL         = '/models/star_aventure_spaceship_starship_fighter.glb';
 
 export interface DeckService {
   /** Two-digit ordinal shown beside the label, e.g. "01". */

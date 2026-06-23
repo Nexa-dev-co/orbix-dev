@@ -4,23 +4,20 @@ import { useRef, useState } from 'react';
 import { useServicesDeck, type DeckStatus } from '../hooks/useServicesDeck';
 
 interface DeckCanvasProps {
-  /** Index of the powered-on craft, or null when the fleet is dormant. */
-  activeIndex: number | null;
-  /** Index of the craft under the pointer, or null. */
-  hoverIndex: number | null;
+  /** Index of the craft currently on the pad. */
+  activeIndex: number;
+  /** A horizontal flick on the craft asks to switch: +1 = next, -1 = previous. */
+  onFlick: (direction: number) => void;
 }
 
-export default function DeckCanvas({ activeIndex, hoverIndex }: DeckCanvasProps) {
+export default function DeckCanvas({ activeIndex, onFlick }: DeckCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState<DeckStatus>({ isLoading: true, percent: -1 });
 
-  useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus: setStatus });
+  useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus: setStatus });
 
   return (
     <div className="deck-canvas-wrap">
-      {/* Soft pool of light the fleet appears to rest within */}
-      <div className="deck-glow" aria-hidden="true" />
-
       <canvas ref={canvasRef} className="deck-canvas" />
 
       <div

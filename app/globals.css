@@ -877,8 +877,10 @@ body {
   isolation: isolate;
   width: 100%;
   min-height: 100vh;
+  /* Pull the section up over the hero's last viewport so the deck's pin begins exactly where the
+     hero's pin ends — no empty black scroll between the filled hero square and the carousel. */
   margin-top: -100vh;
-  background: transparent;
+  background: var(--bg);
   overflow: hidden;
 }
 
@@ -892,17 +894,18 @@ body {
   opacity: 0;
 }
 
-/* WebGL layer — full-bleed, above the backdrop, behind the overlay. Hidden until the reveal
-   (GSAP fades it in): the ground pool inside always renders, so leaving the wrap visible
-   would paint the dark stage over the hero while the deck overlaps it during the intro. The
-   ships inside still fade in individually on top of this (material opacity), and the glow has
-   its own fade below. */
+/* WebGL layer — full-bleed, above the backdrop, behind the overlay. GSAP fades it in at pin-start
+   (useDeckCarousel) so the craft materialises on the hero's black square. Pointer-events are on so
+   the craft can be dragged; the overlay above stays click-through except for the carousel strip. */
 .deck-canvas-wrap {
   position: absolute;
   inset: 0;
   z-index: 1;
+  /* Hidden until the pin's reveal beat (useDeckCarousel fades it in) so the craft materialises on
+     the black rather than sliding up into view. The dynamic import mounts this late, so the initial
+     hidden state has to live in CSS, not only in the hook's mount-time gsap.set. */
   opacity: 0;
-  visibility: hidden;
+  pointer-events: auto;
 }
 
 .deck-canvas {
@@ -911,26 +914,8 @@ body {
   height: 100%;
 }
 
-/* Soft volumetric pool the fleet rests within, low and centred. Starts hidden; GSAP breathes
-   it in on reveal. */
-.deck-glow {
-  position: absolute;
-  left: 50%;
-  bottom: 12%;
-  width: 90vw;
-  max-width: 1100px;
-  height: 46vh;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(0, 229, 255, 0.1) 0%,
-    rgba(0, 90, 130, 0.05) 36%,
-    transparent 70%
-  );
-  filter: blur(30px);
-  pointer-events: none;
-  opacity: 0;
+.deck-canvas:active {
+  cursor: grabbing;
 }
 
 /* Loading — ring + count while the four vessels stream in */
@@ -1053,24 +1038,28 @@ body {
   }
 }
 
-/* Fleet row — four equal columns aligned with the ships behind. Each column is a single
-   button covering its ship's strip and ending in that ship's label; this is the deck's
-   only interactive zone. */
-.deck-fleet {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  align-items: end;
+/* Carousel strip — the four craft as a row of names along the bottom. The active one is lit;
+   clicking a name jumps the carousel to it (drag the craft or scroll to cycle otherwise). This
+   row is the overlay's only interactive zone. */
+.deck-carousel {
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: clamp(20px, 5vw, 64px);
   pointer-events: auto;
+  /* Auto-invert against whatever sits behind (the lit craft / pad) so the names stay legible over
+     bright hulls as well as the black — same trick the navbar uses. */
+  mix-blend-mode: difference;
 }
 
-.deck-column {
+.deck-carousel-item {
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   align-items: center;
-  height: 100%;
+  gap: 9px;
+  padding: 6px 4px;
   background: none;
   border: none;
   cursor: pointer;
@@ -1078,20 +1067,12 @@ body {
   font: inherit;
 }
 
-.deck-column:focus-visible {
+.deck-carousel-item:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 4px;
 }
 
-.deck-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 9px;
-  padding-bottom: 6px;
-}
-
-.deck-label-number {
+.deck-carousel-number {
   font-family: var(--font-dm-sans), sans-serif;
   font-size: 10px;
   font-weight: 400;
@@ -1100,18 +1081,18 @@ body {
   transition: color 0.3s ease;
 }
 
-.deck-label-name {
+.deck-carousel-name {
   font-weight: 700;
   font-size: clamp(0.85rem, 1.15vw, 1.1rem);
   letter-spacing: -0.01em;
   line-height: 1.1;
   text-align: center;
-  color: rgba(235, 232, 224, 0.55);
+  color: rgba(235, 232, 224, 0.5);
   transition: color 0.3s ease;
 }
 
-/* Thin cyan meter under each label — fills on hover, fully on active. */
-.deck-label-line {
+/* Thin cyan meter under each name — fills on the active craft. */
+.deck-carousel-line {
   position: relative;
   width: 46px;
   height: 1px;
@@ -1119,38 +1100,34 @@ body {
   background: var(--border);
 }
 
-.deck-label-line::after {
+.deck-carousel-line::after {
   content: "";
   position: absolute;
   inset: 0;
   background: var(--accent);
   box-shadow: 0 0 9px rgba(0, 229, 255, 0.65);
   transform: scaleX(0);
-  transform-origin: left center;
+  transform-origin: center;
   transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.deck-column.is-hovered .deck-label-name {
-  color: rgba(235, 232, 224, 0.9);
+.deck-carousel-item:hover .deck-carousel-name {
+  color: rgba(235, 232, 224, 0.85);
 }
 
-.deck-column.is-active .deck-label-name {
+.deck-carousel-item.is-active .deck-carousel-name {
   color: var(--fg);
 }
 
-.deck-column.is-active .deck-label-number {
+.deck-carousel-item.is-active .deck-carousel-number {
   color: var(--accent);
 }
 
-.deck-column.is-hovered .deck-label-line::after {
-  transform: scaleX(0.4);
-}
-
-.deck-column.is-active .deck-label-line::after {
+.deck-carousel-item.is-active .deck-carousel-line::after {
   transform: scaleX(1);
 }
 
-/* Stacked layout — intro + detail stack, labels stay a four-up row */
+/* Stacked layout — intro + detail stack; the strip stays a centred row */
 @media (max-width: 820px) {
   .deck-head {
     flex-direction: column;
@@ -1160,7 +1137,11 @@ body {
     max-width: none;
   }
 
-  .deck-label-name {
+  .deck-carousel {
+    gap: 18px;
+  }
+
+  .deck-carousel-name {
     font-size: 0.78rem;
   }
 }

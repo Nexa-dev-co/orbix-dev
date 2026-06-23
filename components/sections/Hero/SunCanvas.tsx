@@ -5,8 +5,6 @@ import * as THREE from 'three';
 import { SUN_VERTEX_SHADER, SUN_FRAGMENT_SHADER } from './sunShaders';
 
 const SUN_RADIUS     = 0.76;
-const CORONA_RADIUS  = 0.92;
-const OUTER_RADIUS   = 1.12;
 const CAMERA_FOV     = 35;
 const CAMERA_Z       = 3;
 const ROTATION_SPEED = 0.0018;
@@ -63,30 +61,6 @@ export default function SunCanvas() {
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
     scene.add(sunMesh);
 
-    // ── Inner corona — tight additive glow ─────────────────────────
-    const coronaGeo = new THREE.SphereGeometry(CORONA_RADIUS, 32, 32);
-    const coronaMat = new THREE.MeshBasicMaterial({
-      color: 0x0af0ff,
-      transparent: true,
-      opacity: 0.07,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.BackSide,
-    });
-    scene.add(new THREE.Mesh(coronaGeo, coronaMat));
-
-    // ── Outer halo — wide soft glow ────────────────────────────────
-    const outerGeo = new THREE.SphereGeometry(OUTER_RADIUS, 32, 32);
-    const outerMat = new THREE.MeshBasicMaterial({
-      color: 0x004488,
-      transparent: true,
-      opacity: 0.04,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.BackSide,
-    });
-    scene.add(new THREE.Mesh(outerGeo, outerMat));
-
     // ── Render loop ────────────────────────────────────────────────
     const clock = new THREE.Clock();
     let rafId: number;
@@ -115,9 +89,8 @@ export default function SunCanvas() {
       cancelAnimationFrame(rafId);
       observer.disconnect();
       renderer.dispose();
-      sunGeo.dispose();    sunMat.dispose();
-      coronaGeo.dispose(); coronaMat.dispose();
-      outerGeo.dispose();  outerMat.dispose();
+      sunGeo.dispose();
+      sunMat.dispose();
     };
   }, []);
 

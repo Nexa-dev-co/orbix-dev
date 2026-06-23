@@ -24,6 +24,10 @@ export interface DeckService {
   capabilities: string[];
   /** Path to this service's vessel — a Draco-compressed .glb under /public/models. */
   modelPath: string;
+  /** Hull mix — the colour where the hull faces the camera (CSS hex). Multiplies the texture. */
+  colorCore: string;
+  /** Hull mix — the colour at grazing/edge angles, blended with colorCore across the hull. */
+  colorEdge: string;
 }
 
 export const DECK_SERVICES: DeckService[] = [
@@ -35,6 +39,8 @@ export const DECK_SERVICES: DeckService[] = [
       'Bespoke platforms engineered from the metal up — no templates, no compromise. Every interaction is hand-tuned until the product moves like it has its own momentum.',
     capabilities: ['Next.js', 'WebGL / GLSL', 'Realtime', 'Design Systems'],
     modelPath: WEB_VESSEL,
+    colorCore: '#2f6ad0',
+    colorEdge: '#22ecff',
   },
   {
     index: '02',
@@ -44,6 +50,8 @@ export const DECK_SERVICES: DeckService[] = [
       'Apps that feel like an extension of the device, not a website in a frame. Sixty frames a second, offline-first, and tactile in the hand.',
     capabilities: ['iOS / Android', 'Offline-first', 'Motion', 'Haptics'],
     modelPath: MOBILE_VESSEL,
+    colorCore: '#1aa79c',
+    colorEdge: '#6cf2d0',
   },
   {
     index: '03',
@@ -53,6 +61,8 @@ export const DECK_SERVICES: DeckService[] = [
       'Operational cores that pull every signal into one orbit. We model the way your business actually works, then make the software disappear into the workflow.',
     capabilities: ['Workflow Engines', 'Integrations', 'Roles & Access', 'Reporting'],
     modelPath: ENTERPRISE_VESSEL,
+    colorCore: '#4a6a9a',
+    colorEdge: '#9fe6ff',
   },
   {
     index: '04',
@@ -62,5 +72,7 @@ export const DECK_SERVICES: DeckService[] = [
       'Models wired into real products, not demos. Retrieval, agents, and inference pipelines designed around your data — useful on day one, smarter every week.',
     capabilities: ['LLM Pipelines', 'RAG', 'Agents', 'Evaluation'],
     modelPath: AI_VESSEL,
+    colorCore: '#7a4ad0',
+    colorEdge: '#36e6ff',
   },
 ];

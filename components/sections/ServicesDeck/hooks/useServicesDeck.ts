@@ -31,22 +31,28 @@ const SHADOW_SCALE      = 1.5;   // shadow footprint relative to the hull's foot
 const SHADOW_OPACITY    = 0.6;
 const SHADOW_LIFT       = 0.004; // nudge above the ground to avoid z-fighting
 
-// ── Lighting (shared stage rig; per-ship engine lights arrive in a later step) ──
-const KEY_LIGHT_INTENSITY  = 2.1;
-const FILL_LIGHT_INTENSITY = 0.55;
-const RIM_LIGHT_INTENSITY  = 1.4;
-const AMBIENT_INTENSITY    = 0.22;
-const RIM_LIGHT_COLOR      = 0x00e5ff; // Orbix cyan rim traces each hull's edge
+// ── Lighting (shared stage rig; per-ship engine lights ramp on hover/active) ──
+const KEY_LIGHT_COLOR      = 0xfff2e2; // warm key so the hulls read with their own colour, not washed cold
+const KEY_LIGHT_INTENSITY  = 2.6;      // stronger + directional → reveals the surface/normal detail
+const FILL_LIGHT_COLOR     = 0x9aa7bb; // neutral cool fill (was a strong blue that tinted everything)
+const FILL_LIGHT_INTENSITY = 0.5;
+const RIM_LIGHT_COLOR      = 0x00e5ff; // Orbix cyan edge — kept as an accent, not a wash
+const RIM_LIGHT_INTENSITY  = 0.7;
+const AMBIENT_INTENSITY    = 0.16;     // lower so the directional key carves out contrast/texture
+const ENV_MAP_INTENSITY    = 1.2;      // a touch more environment reflection so metal/panels read
+const TONE_MAPPING_EXPOSURE = 1.18;
 
-// ── Per-ship engine lights (ramped on hover, and held while a ship is active) ──
-const ENGINE_LIGHT_COLOR       = 0x00e5ff;
-const ENGINE_LIGHT_INTENSITY   = 6;    // cyan glow when fully lit
-const ENGINE_LIGHT_DISTANCE    = 5;
-const ENGINE_LIGHT_DECAY       = 2;
-const ENGINE_LIGHT_OFFSET_Y    = 0.45; // sits low/front so the hull reads as "engines on"
-const ENGINE_LIGHT_OFFSET_Z    = 0.6;
-const HOVER_EMISSIVE_INTENSITY = 2;    // boosts the model's own emissive map when lit
-const LIGHT_RAMP_DURATION      = 0.5;  // seconds to fade lights in / out
+// ── Powered-on look ──
+// Each hull wears a two-colour fresnel mix (colorCore facing the camera → colorEdge at
+// grazing angles, per ship in deckServices) rather than a flat tint. The state changes only
+// the ship itself: the mix darkens when dormant and brightens when powered, and the model's
+// *internal* emissive ("lights inside the ship") ramps up. No external lamp touches the hull —
+// it stays lit from above by the shared key light.
+const FRESNEL_POWER          = 2.2; // higher → the edge colour hugs the silhouette more tightly
+const DORMANT_BRIGHTNESS     = 0.5; // hull multiplier when off (dark)
+const ACTIVE_BRIGHTNESS      = 1.2; // hull multiplier when fully powered (bright)
+const LIT_EMISSIVE_INTENSITY = 1.3; // the model's own internal lights when on
+const LIGHT_RAMP_DURATION    = 0.5; // seconds to fade between dormant and active
 
 // ── Activation (the clicked ship powers up; the others recede) ──
 const FORWARD_STEP          = 1.1;  // active ship eases toward the camera
@@ -91,9 +97,10 @@ interface DeckShip {
   spin: THREE.Group;
   materials: THREE.Material[];
   shadow: THREE.Mesh | null;
-  /** Cyan engine light, intensity 0 when dormant. */
-  engineLight: THREE.PointLight;
-  /** 0 = dark, 1 = fully lit. GSAP tweens this; applyLitState pushes it to light + emissive. */
+  /** The hull's two mix colours (core → edge), applied as a fresnel blend in the shader. */
+  colorCore: THREE.Color;
+  colorEdge: THREE.Color;
+  /** 0 = dormant, 1 = fully lit. GSAP tweens this; applyLitState pushes it to brightness + emissive. */
   litState: { value: number };
   /** 1 = full, DIM_PRESENCE = dimmed. GSAP tweens this; applyOpacity folds it into opacity. */
   presenceState: { value: number };
@@ -163,12 +170,53 @@ function collectMaterials(root: THREE.Object3D): THREE.Material[] {
         if (material instanceof THREE.MeshStandardMaterial) {
           material.userData.baseEmissiveIntensity = material.emissiveIntensity;
           material.emissiveIntensity = 0;
+          // Let the environment read a little stronger so metal + painted panels show.
+          material.envMapIntensity = ENV_MAP_INTENSITY;
         }
         materials.push(material);
       }
     }
   });
   return materials;
+}
+
+// Patch a hull material so its base colour becomes a two-colour fresnel mix (colorCore where
+// the surface faces the camera → colorEdge at grazing angles) scaled by a brightness the
+// state drives. The brightness lives in a uniform object stored on userData so applyLitState
+// can animate it (dark when dormant, bright when powered) without recompiling.
+function setupHullTint(
+  material: THREE.MeshStandardMaterial,
+  colorCore: THREE.Color,
+  colorEdge: THREE.Color,
+) {
+  const brightnessUniform = { value: DORMANT_BRIGHTNESS };
+  material.userData.tintBrightness = brightnessUniform;
+
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uColorCore = { value: colorCore };
+    shader.uniforms.uColorEdge = { value: colorEdge };
+    shader.uniforms.uTintBrightness = brightnessUniform;
+    shader.uniforms.uFresnelPower = { value: FRESNEL_POWER };
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        uniform vec3 uColorCore;
+        uniform vec3 uColorEdge;
+        uniform float uTintBrightness;
+        uniform float uFresnelPower;`,
+      )
+      // normal (view space) + vViewPosition are both available after this chunk; diffuseColor
+      // was set earlier in <color_fragment> and is still in scope for the lighting below.
+      .replace(
+        '#include <normal_fragment_begin>',
+        `#include <normal_fragment_begin>
+        float hullFresnel = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), uFresnelPower);
+        diffuseColor.rgb *= mix(uColorCore, uColorEdge, hullFresnel) * uTintBrightness;`,
+      );
+  };
+  material.needsUpdate = true;
 }
 
 // Centre the model, scale so every hull reads at the same size, and rest its base on the
@@ -217,8 +265,10 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
     // ── Renderer ──
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    // Neutral tone mapping holds the hull colours instead of desaturating highlights the way
+    // ACES does — the fleet read flat/grey under ACES.
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    renderer.toneMappingExposure = TONE_MAPPING_EXPOSURE;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     const scene  = new THREE.Scene();
@@ -231,10 +281,10 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
     const roomEnvironment = new RoomEnvironment();
     scene.environment = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
 
-    // Key + cool fill + a cyan rim that traces each hull's edge.
-    const keyLight = new THREE.DirectionalLight(0xffffff, KEY_LIGHT_INTENSITY);
+    // Warm key + neutral fill + a cyan rim that traces each hull's edge.
+    const keyLight = new THREE.DirectionalLight(KEY_LIGHT_COLOR, KEY_LIGHT_INTENSITY);
     keyLight.position.set(4, 7, 5);
-    const fillLight = new THREE.DirectionalLight(0x6f8cff, FILL_LIGHT_INTENSITY);
+    const fillLight = new THREE.DirectionalLight(FILL_LIGHT_COLOR, FILL_LIGHT_INTENSITY);
     fillLight.position.set(-6, -1, 2);
     const rimLight = new THREE.DirectionalLight(RIM_LIGHT_COLOR, RIM_LIGHT_INTENSITY);
     rimLight.position.set(-3, 3, -6);
@@ -262,7 +312,7 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
       depthWrite: false,
     });
 
-    const ships: DeckShip[] = DECK_SERVICES.map(() => {
+    const ships: DeckShip[] = DECK_SERVICES.map((service) => {
       const slot = new THREE.Group();
       const lift = new THREE.Group();
       const spin = new THREE.Group();
@@ -270,26 +320,16 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
       slot.position.z = SHIP_DEPTH;
       lift.add(spin);
       slot.add(lift);
-
-      // Engine light rides with the ship (on lift → follows the hover/float lift + forward
-      // step). Off until the ship is hovered or active.
-      const engineLight = new THREE.PointLight(
-        ENGINE_LIGHT_COLOR,
-        0,
-        ENGINE_LIGHT_DISTANCE,
-        ENGINE_LIGHT_DECAY,
-      );
-      engineLight.position.set(0, ENGINE_LIGHT_OFFSET_Y, ENGINE_LIGHT_OFFSET_Z);
-      lift.add(engineLight);
-
       scene.add(slot);
+
       return {
         slot,
         lift,
         spin,
         materials: [],
         shadow: null,
-        engineLight,
+        colorCore: new THREE.Color(service.colorCore),
+        colorEdge: new THREE.Color(service.colorEdge),
         litState: { value: 0 },
         presenceState: { value: 1 },
         revealState: { value: 0 },
@@ -297,13 +337,17 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
       };
     });
 
-    // Push a ship's lit value (0..1) onto its engine light + emissive strength.
+    // Push a ship's lit value (0..1) onto its hull brightness + internal emissive strength.
+    // Nothing here lights the hull from outside — the colour mix is constant; the state just
+    // moves it from dark (dormant) to bright (powered) while its own emissive "lights" come up.
     const applyLitState = (ship: DeckShip) => {
       const litValue = ship.litState.value;
-      ship.engineLight.intensity = litValue * ENGINE_LIGHT_INTENSITY;
+      const brightness = THREE.MathUtils.lerp(DORMANT_BRIGHTNESS, ACTIVE_BRIGHTNESS, litValue);
       ship.materials.forEach((material) => {
         if (material instanceof THREE.MeshStandardMaterial) {
-          material.emissiveIntensity = litValue * HOVER_EMISSIVE_INTENSITY;
+          const tintBrightness = material.userData.tintBrightness as { value: number } | undefined;
+          if (tintBrightness) tintBrightness.value = brightness;
+          material.emissiveIntensity = litValue * LIT_EMISSIVE_INTENSITY;
         }
       });
     };
@@ -465,7 +509,13 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
           const ship = ships[index];
           ship.spin.add(prepared.group);
           ship.materials = prepared.materials;
-          // Reflect the current hover/active/reveal state on the freshly-loaded hull.
+          // Give every hull material its two-colour mix, then reflect the current
+          // hover/active/reveal state (brightness + emissive + opacity) on it.
+          ship.materials.forEach((material) => {
+            if (material instanceof THREE.MeshStandardMaterial) {
+              setupHullTint(material, ship.colorCore, ship.colorEdge);
+            }
+          });
           applyLitState(ship);
           applyOpacity(ship);
 

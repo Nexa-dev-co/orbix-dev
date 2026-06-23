@@ -66,10 +66,18 @@ const MOUSE_TRACK_YAW       = 0.5;  // radians the active ship yaws toward the p
 const MOUSE_TRACK_PITCH     = 0.28;
 const POINTER_EASE          = 0.06;
 
-// ── Entrance (each hull materialises on its own beat when the deck reveals) ──
-const SHIP_REVEAL_STAGGER  = 0.14; // seconds between each hull arriving
-const SHIP_REVEAL_DURATION = 0.9;
-const SHIP_REVEAL_SCALE_FROM = 0.8; // hulls pop up from slightly small
+// ── Entrance (replays every time the deck scrolls into view; each hull has its own move) ──
+const SHIP_REVEAL_DURATION = 1.6;  // slower, more cinematic arrival
+const SHIP_REVEAL_STAGGER  = 0.28; // seconds between each hull starting its move
+
+// Per-ship intro start offsets (index-matched to DECK_SERVICES). Each hull begins here and
+// eases back to rest (0,0,0 / no turn / full scale) as it fades in.
+const SHIP_INTROS = [
+  { x: -2.6, y: 0.4, z: 0, rotationY: 0, scale: 1 },    // 01 Web — glides in from the left
+  { x: 0, y: 2.0, z: 0, rotationY: 0, scale: 1 },        // 02 Mobile — drops in from above
+  { x: 0, y: 0, z: -1.6, rotationY: 0, scale: 0.35 },    // 03 Enterprise — surges up from depth, scaling in
+  { x: 2.6, y: 0.4, z: 0, rotationY: -1.0, scale: 1 },   // 04 AI — banks in from the right with a turn
+];
 
 const DECK_COLUMN_SELECTOR = '.deck-column';
 
@@ -93,6 +101,9 @@ interface DeckOptions {
  *  spin owns yaw/pitch (base view + mouse tracking). */
 interface DeckShip {
   slot: THREE.Group;
+  /** Entrance-only transform layer (slot → intro → lift → spin); animated solely by the
+   *  intro so it never fights the render loop's float / mouse-track on lift + spin. */
+  intro: THREE.Group;
   lift: THREE.Group;
   spin: THREE.Group;
   materials: THREE.Material[];
@@ -313,17 +324,20 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
     });
 
     const ships: DeckShip[] = DECK_SERVICES.map((service) => {
-      const slot = new THREE.Group();
-      const lift = new THREE.Group();
-      const spin = new THREE.Group();
+      const slot  = new THREE.Group();
+      const intro = new THREE.Group();
+      const lift  = new THREE.Group();
+      const spin  = new THREE.Group();
       spin.rotation.y = BASE_YAW;
       slot.position.z = SHIP_DEPTH;
       lift.add(spin);
-      slot.add(lift);
+      intro.add(lift);
+      slot.add(intro);
       scene.add(slot);
 
       return {
         slot,
+        intro,
         lift,
         spin,
         materials: [],
@@ -362,37 +376,47 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
       });
     };
 
-    // The fleet's entrance: each hull fades + pops up on its own beat. Fired by the deck
-    // reveal once the hero's square has filled (see DECK_REVEAL_EVENT / useDeckReveal).
+    // The fleet's entrance — fired by DECK_REVEAL_EVENT every time the deck scrolls into view.
+    // Each hull resets to its own intro start (instant), then eases in on its own beat, so the
+    // animation replays cleanly on re-entry.
     const playReveal = () => {
       ships.forEach((ship, index) => {
+        const introStart = SHIP_INTROS[index % SHIP_INTROS.length];
+
+        // Snap to the hidden start of this ship's move.
+        ship.revealState.value = 0;
+        applyOpacity(ship);
+        ship.intro.position.set(introStart.x, introStart.y, introStart.z);
+        ship.intro.rotation.y = introStart.rotationY;
+        ship.intro.scale.setScalar(introStart.scale);
+
         if (reduceMotion) {
           ship.revealState.value = 1;
-          ship.lift.scale.setScalar(1);
           applyOpacity(ship);
+          ship.intro.position.set(0, 0, 0);
+          ship.intro.rotation.y = 0;
+          ship.intro.scale.setScalar(1);
           return;
         }
+
+        const delay = index * SHIP_REVEAL_STAGGER;
         gsap.to(ship.revealState, {
           value: 1,
           duration: SHIP_REVEAL_DURATION,
-          delay: index * SHIP_REVEAL_STAGGER,
+          delay,
           ease: 'power2.out',
           overwrite: true,
           onUpdate: () => applyOpacity(ship),
         });
-        gsap.fromTo(
-          ship.lift.scale,
-          { x: SHIP_REVEAL_SCALE_FROM, y: SHIP_REVEAL_SCALE_FROM, z: SHIP_REVEAL_SCALE_FROM },
-          {
-            x: 1,
-            y: 1,
-            z: 1,
-            duration: SHIP_REVEAL_DURATION,
-            delay: index * SHIP_REVEAL_STAGGER,
-            ease: 'back.out(1.6)',
-            overwrite: true,
-          },
-        );
+        gsap.to(ship.intro.position, {
+          x: 0, y: 0, z: 0, duration: SHIP_REVEAL_DURATION, delay, ease: 'power3.out', overwrite: true,
+        });
+        gsap.to(ship.intro.rotation, {
+          y: 0, duration: SHIP_REVEAL_DURATION, delay, ease: 'power3.out', overwrite: true,
+        });
+        gsap.to(ship.intro.scale, {
+          x: 1, y: 1, z: 1, duration: SHIP_REVEAL_DURATION, delay, ease: 'back.out(1.3)', overwrite: true,
+        });
       });
     };
 
@@ -610,7 +634,9 @@ export function useServicesDeck({ canvasRef, activeIndex, hoverIndex, onStatus }
         gsap.killTweensOf(ship.liftBase);
         gsap.killTweensOf(ship.slot.position);
         gsap.killTweensOf(ship.spin.scale);
-        gsap.killTweensOf(ship.lift.scale);
+        gsap.killTweensOf(ship.intro.position);
+        gsap.killTweensOf(ship.intro.rotation);
+        gsap.killTweensOf(ship.intro.scale);
         ship.spin.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             child.geometry.dispose();

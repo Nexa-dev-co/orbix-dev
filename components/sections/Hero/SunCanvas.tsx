@@ -2,14 +2,25 @@
 
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { SUN_VERTEX_SHADER, SUN_FRAGMENT_SHADER } from './sunShaders';
 
-const TEXTURE_PATH   = '/textures/sun/Gemini_Generated_Image_4t1f6s4t1f6s4t1f.png';
 const SUN_RADIUS     = 0.76;
 const CORONA_RADIUS  = 0.92;
 const OUTER_RADIUS   = 1.12;
 const CAMERA_FOV     = 35;
 const CAMERA_Z       = 3;
 const ROTATION_SPEED = 0.0018;
+
+// Procedural plasma-star surface (see sunShaders.ts). A hot star is genuinely
+// photorealistic in this blue/cyan range, so this stays on-brand while reading
+// as a real, churning star. Swap these three for warm tones (e.g. core 0xfff2c8 /
+// mid 0xff8a2b / deep 0x6e1f02) to make it a classic orange sun instead.
+const SUN_COLOR_CORE = 0xd8f6ff; // white-hot brightest granules
+const SUN_COLOR_MID  = 0x00d9ff; // electric-cyan plasma body (brand accent)
+const SUN_COLOR_DEEP = 0x012b52; // deep-blue convection troughs
+const NOISE_SCALE      = 2.4;
+const FLOW_SPEED       = 0.5;
+const SURFACE_CONTRAST = 1.35;
 
 export default function SunCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -19,8 +30,10 @@ export default function SunCanvas() {
     if (!canvas) return;
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    // Higher pixel ratio so the sphere stays sharp when GSAP scales the card up
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio * 2, 4));
+    // The surface is procedural, so it stays sharp at any scale without texture
+    // supersampling — a plain DPR clamp keeps the fragment shader affordable when
+    // the scroll expansion blows the sun up to fill the hero.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     const initialWidth  = canvas.clientWidth  || canvas.offsetWidth  || 900;
     const initialHeight = canvas.clientHeight || canvas.offsetHeight || 300;
@@ -30,12 +43,23 @@ export default function SunCanvas() {
     const camera = new THREE.PerspectiveCamera(CAMERA_FOV, initialWidth / initialHeight, 0.1, 100);
     camera.position.z = CAMERA_Z;
 
-    // ── Sun sphere ─────────────────────────────────────────────────
-    const loader     = new THREE.TextureLoader();
-    const sunTexture = loader.load(TEXTURE_PATH);
+    // ── Sun sphere — procedural plasma surface ─────────────────────
+    const sunUniforms = {
+      uTime:       { value: 0 },
+      uColorCore:  { value: new THREE.Color(SUN_COLOR_CORE) },
+      uColorMid:   { value: new THREE.Color(SUN_COLOR_MID) },
+      uColorDeep:  { value: new THREE.Color(SUN_COLOR_DEEP) },
+      uNoiseScale: { value: NOISE_SCALE },
+      uFlowSpeed:  { value: FLOW_SPEED },
+      uContrast:   { value: SURFACE_CONTRAST },
+    };
 
     const sunGeo = new THREE.SphereGeometry(SUN_RADIUS, 64, 64);
-    const sunMat = new THREE.MeshBasicMaterial({ map: sunTexture });
+    const sunMat = new THREE.ShaderMaterial({
+      vertexShader:   SUN_VERTEX_SHADER,
+      fragmentShader: SUN_FRAGMENT_SHADER,
+      uniforms:       sunUniforms,
+    });
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
     scene.add(sunMesh);
 
@@ -64,10 +88,12 @@ export default function SunCanvas() {
     scene.add(new THREE.Mesh(outerGeo, outerMat));
 
     // ── Render loop ────────────────────────────────────────────────
+    const clock = new THREE.Clock();
     let rafId: number;
     const animate = () => {
       rafId = requestAnimationFrame(animate);
       sunMesh.rotation.y += ROTATION_SPEED;
+      sunUniforms.uTime.value = clock.getElapsedTime();
       renderer.render(scene, camera);
     };
     animate();

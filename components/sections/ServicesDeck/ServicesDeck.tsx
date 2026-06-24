@@ -24,7 +24,7 @@ export default function ServicesDeck() {
   const activeService = DECK_SERVICES[activeIndex];
 
   return (
-    <section ref={sectionRef} className="services-deck">
+    <section ref={sectionRef} id="services" className="services-deck">
       {/* Solid black stage behind the fleet — matches the hero's filled square so the craft reads
           as materialising on the same black. */}
       <div className="deck-backdrop" aria-hidden="true" />

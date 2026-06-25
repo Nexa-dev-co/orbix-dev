@@ -23,7 +23,7 @@ export default function ServicesDeck({ activeIndex, goTo }: ServicesDeckProps) {
   const activeService = DECK_SERVICES[activeIndex];
 
   return (
-    <section className="services-deck">
+    <section id="services" className="services-deck">
       {/* Solid black stage behind the fleet — matches the hero's filled square so the craft
           reads as materialising on the same black. */}
       <div className="deck-backdrop" aria-hidden="true" />

@@ -6,7 +6,7 @@ import { useNavbarAnimation } from '@/lib/hooks/useNavbarAnimation';
 // `enter` drives the directional entrance (see useNavbarAnimation); `key` maps the item
 // to its scroll-progress meter and the CSS var its section feeds (--nav-progress-<key>).
 const NAV_ITEMS = [
-  { key: 'services', number: '01', label: 'Services', href: '/services', enter: 'top'    },
+  { key: 'services', number: '01', label: 'Services', href: '/#services', enter: 'top'    },
   { key: 'work',     number: '02', label: 'Work',     href: '#work',     enter: 'left'   },
   { key: 'process',  number: '03', label: 'Process',  href: '#process',  enter: 'right'  },
   { key: 'contact',  number: '04', label: 'Contact',  href: '#contact',  enter: 'bottom' },

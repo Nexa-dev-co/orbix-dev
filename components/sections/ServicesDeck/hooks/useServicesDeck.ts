@@ -6,7 +6,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import gsap from 'gsap';
 import { prefersReducedMotion } from '@/lib/prefersReducedMotion';
 import { DECK_SERVICES } from '../deckServices';
-import { DECK_REVEAL_EVENT } from './useDeckCarousel';
+import { DECK_REVEAL_EVENT } from '../deckEvents';
 
 // ── Framing ─────────────────────────────────────────────────────────────
 const CAMERA_FOV      = 34;

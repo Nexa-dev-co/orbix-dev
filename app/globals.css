@@ -867,31 +867,26 @@ body {
 /* ─── Services Deck — the four-craft fleet (homepage) ────────────── */
 
 /* Full-viewport stage: WebGL fleet behind, DOM labels + detail overlaid.
-   The negative margin pulls the deck up by exactly one viewport so it overlaps the hero's
-   tail — the 100vh the fullscreen black square would otherwise scroll away empty. The deck
-   stays invisible across that overlap (driven by useDeckReveal), so the hero's fill reads
-   through it, then the fleet reveals on the black. Tune this value if the hero height or
-   pin distance changes. */
+   The deck is an overlay INSIDE the hero section (inset:0), not a section of its own — the
+   hero's single pin fills the square, then reveals this on the now-full-black square, then
+   runs the carousel. Hidden until that reveal (the hero pin fades it in via autoAlpha), so no
+   margin hack and no empty scroll between the filled square and the fleet. */
 .services-deck {
-  position: relative;
+  position: absolute;
+  inset: 0;
   isolation: isolate;
-  width: 100%;
-  min-height: 100vh;
-  /* Pull the section up over the hero's last viewport so the deck's pin begins exactly where the
-     hero's pin ends — no empty black scroll between the filled hero square and the carousel. */
-  margin-top: -100vh;
-  background: var(--bg);
+  z-index: 25; /* above the hero square (z 20); the fixed sun (z 9500) still floats over it */
   overflow: hidden;
+  opacity: 0;
 }
 
-/* Solid black backdrop — GSAP fades it in on reveal (see useDeckReveal). Starts transparent
-   so the hero square's fill shows through during the overlap. */
+/* Solid black backdrop behind the fleet. The whole .services-deck overlay fades in on reveal
+   (driven by the hero pin), so this just stays opaque black underneath the canvas. */
 .deck-backdrop {
   position: absolute;
   inset: 0;
   z-index: 0;
   background: var(--bg);
-  opacity: 0;
 }
 
 /* WebGL layer — full-bleed, above the backdrop, behind the overlay. GSAP fades it in at pin-start
@@ -901,10 +896,8 @@ body {
   position: absolute;
   inset: 0;
   z-index: 1;
-  /* Hidden until the pin's reveal beat (useDeckCarousel fades it in) so the craft materialises on
-     the black rather than sliding up into view. The dynamic import mounts this late, so the initial
-     hidden state has to live in CSS, not only in the hook's mount-time gsap.set. */
-  opacity: 0;
+  /* The parent .services-deck overlay owns the reveal (opacity:0 until the square fills), so the
+     canvas itself stays opaque and just needs to accept the pointer for dragging the craft. */
   pointer-events: auto;
 }
 

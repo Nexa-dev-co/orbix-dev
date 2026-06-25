@@ -5,7 +5,7 @@ import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { prefersReducedMotion } from '@/lib/prefersReducedMotion';
 import { measureUntransformedRect } from '@/lib/measureUntransformedRect';
 import { REVEAL_EVENT } from '@/components/effects/IntroSequence/introEvents';
-import { DECK_REVEAL_EVENT, DECK_HIDE_EVENT } from '@/components/sections/ServicesDeck/deckEvents';
+import { DECK_REVEAL_EVENT, DECK_HIDE_EVENT, GOTO_SERVICES_EVENT } from '@/components/sections/ServicesDeck/deckEvents';
 
 // Marks the hero while the fleet is on screen. Scopes the services-only layering (sun drops
 // behind the fleet, intervening layers go transparent) so it never touches the fill phase.
@@ -274,6 +274,10 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
     window.addEventListener(REVEAL_EVENT, runReveal);
     const fallbackTimeout = window.setTimeout(runReveal, REVEAL_FALLBACK_MS);
 
+    // The navbar "Services" link asks the pin to scroll to the revealed fleet (craft 0).
+    const onGotoServices = () => goToImplementationRef.current(0);
+    window.addEventListener(GOTO_SERVICES_EVENT, onGotoServices);
+
     // Jump to a craft by scrolling to its snap point; onUpdate then re-stages it. Before the
     // pin exists (e.g. reduced-motion bypass), fall back to setting the craft directly.
     goToImplementationRef.current = (index: number) => {
@@ -295,6 +299,7 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
 
     return () => {
       window.removeEventListener(REVEAL_EVENT, runReveal);
+      window.removeEventListener(GOTO_SERVICES_EVENT, onGotoServices);
       window.clearTimeout(fallbackTimeout);
       gsap.killTweensOf(window);
       scrollTimeline?.scrollTrigger?.kill();

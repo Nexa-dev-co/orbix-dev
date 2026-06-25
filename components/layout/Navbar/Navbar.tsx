@@ -2,6 +2,7 @@
 
 import { useRef, type CSSProperties } from 'react';
 import { useNavbarAnimation } from '@/lib/hooks/useNavbarAnimation';
+import { GOTO_SERVICES_EVENT } from '@/components/sections/ServicesDeck/deckEvents';
 
 // `enter` drives the directional entrance (see useNavbarAnimation); `key` maps the item
 // to its scroll-progress meter and the CSS var its section feeds (--nav-progress-<key>).
@@ -53,6 +54,15 @@ export default function Navbar() {
 
   useNavbarAnimation({ navRef, accentRef, metersRef });
 
+  // On the homepage, "Services" drives the hero pin to the revealed fleet instead of jumping to
+  // the top of the (overlay) section. Off the homepage, the href ("/#services") navigates normally.
+  const handleNavClick = (event: React.MouseEvent, key: string) => {
+    if (key === 'services' && window.location.pathname === '/') {
+      event.preventDefault();
+      window.dispatchEvent(new Event(GOTO_SERVICES_EVENT));
+    }
+  };
+
   return (
     <>
       {/* Cyan accent layer — sits behind the blended bar and renders normally, so the
@@ -98,7 +108,12 @@ export default function Navbar() {
           <ul className="nav-items">
             {NAV_ITEMS.map((navItem) => (
               <li key={navItem.href} className="nav-item" data-enter={navItem.enter}>
-                <a href={navItem.href} className="nav-link" data-key={navItem.key}>
+                <a
+                  href={navItem.href}
+                  className="nav-link"
+                  data-key={navItem.key}
+                  onClick={(event) => handleNavClick(event, navItem.key)}
+                >
                   <span className="nav-link-text">
                     <span className="nav-link-label">{navItem.label}</span>
                     <span className="nav-link-number">{navItem.number}</span>

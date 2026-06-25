@@ -14,3 +14,10 @@ export const DECK_REVEAL_EVENT = 'deck:reveal';
  * fleet + labels sit in front of it in the services section only.
  */
 export const DECK_HIDE_EVENT = 'deck:hide';
+
+/**
+ * Fired by the navbar's "Services" link on the homepage. The hero pin owns the scroll, so it
+ * listens for this and scrolls to the revealed fleet (craft 0) — a plain `#services` anchor would
+ * just jump to the top of the hero without driving the fill → reveal transition.
+ */
+export const GOTO_SERVICES_EVENT = 'orbix:goto-services';

@@ -32,7 +32,7 @@ const STAR_INNER_RADIUS  = 18;  // a spherical shell so stars wrap the scene wit
 const STAR_OUTER_RADIUS  = 60;
 const STAR_SIZE          = 0.16;
 const STAR_OPACITY       = 0.85;
-const STAR_DRIFT         = 0.006; // radians/second of slow yaw so the field breathes
+const STAR_DRIFT         = 0.011; // radians/second of yaw drift — the "floating through space" feel
 
 // ── Fleet ───────────────────────────────────────────────────────────────
 const DRACO_DECODER_PATH = '/draco/';

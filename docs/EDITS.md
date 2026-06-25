@@ -110,7 +110,28 @@ reduced-motion still resolves to end states.
 
 ## Edit 2 — Responsiveness + Adaptation
 
-**Status:** `planned`
+**Status:** `implemented` — typecheck + `next build` pass; **awaiting visual review across
+breakpoints**. Done in the planned order: 2b (resize-safety) first, then 2a (fluid units).
+
+### What shipped (steps)
+- ✅ New `lib/measureUntransformedRect.ts` — strips an element's transform before measuring
+  (the discipline `HeroSun` was missing).
+- ✅ **2b** `useHeroAnimation`: fill geometry is now function-based + `invalidateOnRefresh`,
+  recomputed on every resize via `onRefreshInit`; added
+  `ScrollTrigger.config({ ignoreMobileResize: true })` so a mobile address bar doesn't thrash
+  the pin.
+- ✅ **2b** `HeroSun.syncToSquare` now measures the square's **untransformed** footprint, so
+  resizing mid-scroll no longer balloons or displaces the sun.
+- ✅ **2b (refinement after review)** the untransformed measure wasn't enough — the base box and
+  the pin transform still skidded *during* a live resize (different update cadences). Now
+  `HeroSun` **hides the sun the instant a resize starts, debounces (`RESIZE_SETTLE_MS = 180`),
+  then `ScrollTrigger.refresh()` + re-syncs + fades it back in** (`RESIZE_FADE_SECONDS = 0.35`)
+  at the correct spot. Height-only resizes on touch (address bar) are ignored so it doesn't
+  blink on phone scroll.
+- ✅ **2a** `app/globals.css`: added a fluid type scale (`--fs-micro … --fs-mark`), converted
+  every fixed `px` to `rem`/`clamp()`/`vw`, made `.hero-sun-card` fluid
+  (`clamp(7rem, 20vw, 11rem)`), switched the two breakpoints to `em`. Only 1px/1.5px hairline
+  borders (+ the `0 0 0 1px` ring and corner-bracket offsets tied to them) remain in `px`.
 
 Confirmed scope: fluid units (`rem` + `clamp()`/`vw`), 1px hairline borders kept as the one px
 exception; target range phones (~360px) → large desktop (1440px+); carousel drag works on
@@ -171,16 +192,23 @@ square; all WebGL scenes re-fit cleanly. No "only correct when fully scrolled" c
 Single-shared-sun contract; the `.hero-sun-layer` (base + scroll transform) vs
 `.hero-sun-flight` (intro's o→square flight) ownership split; reduced-motion paths.
 
-### Side effects to watch
-- A fluid sun square changes the intro's `parkSunInO` math (it sizes the sun from the `o` glyph
-  and the square rect) — verify the intro flight still lands dead-center after the square goes
-  fluid.
-- `ScrollTrigger.refresh()` on resize re-runs all triggers; confirm the deck pin + nav meters
-  don't jump or re-fire their reveals.
-- Converting root/body font size affects every `rem` at once — pin down the base before
-  converting, or sizes cascade unexpectedly.
-- Touch: enabling phone layouts means the carousel `pointer` drag and the (disabled) fluid
-  cursor need a deliberate mobile story.
+### Side effects (+ how they were handled)
+- ✅ **Fluid sun square ↔ intro `parkSunInO`.** It measures the `o` glyph and the square rect
+   live, so a fluid square is fine — but **confirm the intro flight still lands centered** on a
+   phone-width screen in visual review (low risk, measured live).
+- ✅ **Resize re-runs triggers.** There's now a single pin (Edit 1), and `ignoreMobileResize`
+   plus `invalidateOnRefresh` keep it from jumping; the nav meters re-measure on `resize`
+   already. Confirm no visible jump on desktop resize.
+- ✅ **Root font size left untouched.** Used per-token `clamp()` + `rem`; `html` font-size is
+   the browser default, so existing rems didn't cascade-shift.
+- ⚠ **Touch story (open).** Carousel drag already uses pointer events (works on touch). The
+   fluid cursor still binds `touchmove` and is decorative; decide later whether to disable it on
+   coarse pointers / small screens. Not blocking.
+
+### ⚠ Not converted on purpose
+- `IntroSequence.tsx` inline styles (already mostly `clamp()`/`vw`/`em`; a couple of small `px`
+   nudges remain) and `HeroSun.tsx`'s initial inline `175` fallback (immediately overwritten by
+   `syncToSquare`, and invisible at `opacity:0`). Flag if you want these fully purged too.
 
 > **Sequencing:** Edit 1 and Edit 2b both touch `useHeroAnimation` + `HeroSun`. Do Edit 1
 > first (it restructures the pin), then 2b (resize-safety) on top of the new single-pin

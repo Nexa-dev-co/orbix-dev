@@ -3,10 +3,15 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { prefersReducedMotion } from '@/lib/prefersReducedMotion';
+import { measureUntransformedRect } from '@/lib/measureUntransformedRect';
 import { REVEAL_EVENT } from '@/components/effects/IntroSequence/introEvents';
 import { DECK_REVEAL_EVENT } from '@/components/sections/ServicesDeck/deckEvents';
 
 gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
+// A mobile address bar showing/hiding fires a resize on almost every scroll. Don't re-pin /
+// re-measure on those vertical-only changes — only on real (width / orientation) ones — or the
+// pinned square + sun jitter as you scroll on a phone.
+ScrollTrigger.config({ ignoreMobileResize: true });
 
 // ── The hero → services handoff (one pin, three phases) ────────────────
 // A single pinned ScrollTrigger owns the whole transition so there's no second
@@ -47,16 +52,6 @@ interface HeroAnimationRefs {
   setActiveCraft: (index: number) => void;
   /** How many craft the carousel cycles through. */
   craftCount: number;
-}
-
-function measureCardLayout(heroCardElement: HTMLDivElement) {
-  // Temporarily clear any in-flight GSAP transform so getBoundingClientRect
-  // returns the element's natural layout position, not its animated one.
-  const existingTransform         = heroCardElement.style.transform;
-  heroCardElement.style.transform = 'none';
-  const cardBoundingRect          = heroCardElement.getBoundingClientRect();
-  heroCardElement.style.transform = existingTransform;
-  return cardBoundingRect;
 }
 
 export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
@@ -138,17 +133,25 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
     //    or stray scroll would otherwise drive the sun/square while it's still flying in.
     let scrollTimeline: ReturnType<typeof gsap.timeline> | null = null;
     let lastCraft = -1;
-    const createTransition = () => {
-      const cardBoundingRect = measureCardLayout(heroCardElement);
-      const cardCenterX      = cardBoundingRect.left + cardBoundingRect.width  / 2;
-      const cardCenterY      = cardBoundingRect.top  + cardBoundingRect.height / 2;
-      const viewportCenterX  = document.documentElement.clientWidth / 2;
-      const viewportCenterY  = window.innerHeight / 2;
-      const translateX       = viewportCenterX - cardCenterX;
-      const translateY       = viewportCenterY - cardCenterY;
-      const fullscreenScaleX = document.documentElement.clientWidth / cardBoundingRect.width;
-      const fullscreenScaleY = window.innerHeight / cardBoundingRect.height;
 
+    // Where the square + sun must travel/scale to fill the viewport. Measured from the square's
+    // *untransformed* layout (so it's right at any scroll state) and recomputed on every
+    // ScrollTrigger refresh — see invalidateOnRefresh / onRefreshInit below. This is what keeps
+    // the sun locked to the square when the window resizes instead of ballooning or drifting.
+    const computeGeometry = () => {
+      const rect = measureUntransformedRect(heroCardElement);
+      const cardCenterX = rect.left + rect.width  / 2;
+      const cardCenterY = rect.top  + rect.height / 2;
+      return {
+        translateX: document.documentElement.clientWidth / 2 - cardCenterX,
+        translateY: window.innerHeight / 2 - cardCenterY,
+        scaleX:     document.documentElement.clientWidth / rect.width,
+        scaleY:     window.innerHeight / rect.height,
+      };
+    };
+    let geometry = computeGeometry();
+
+    const createTransition = () => {
       scrollTimeline = gsap.timeline({
         scrollTrigger: {
           trigger:       heroSection,
@@ -157,6 +160,11 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
           pin:           true,
           scrub:         SCROLL_SCRUB,
           anticipatePin: 1,
+          // Recompute the fill geometry on every refresh (resize) and re-read the function-based
+          // tween values below, so the square + sun stay locked to the square at any scroll
+          // position rather than baking one-time pixel values.
+          invalidateOnRefresh: true,
+          onRefreshInit: () => { geometry = computeGeometry(); },
           snap:
             craftCount > 1
               ? { snapTo: snapProgress, duration: reduceMotion ? 0 : SNAP_DURATION, ease: 'power2.inOut' }
@@ -186,11 +194,12 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
       });
 
       // Phase 1 — the square expands to fill the viewport while the sun rises + grows.
+      // Function-based values so invalidateOnRefresh recomputes them from fresh geometry.
       scrollTimeline.to(heroCardElement, {
-        x:            translateX,
-        y:            translateY,
-        scaleX:       fullscreenScaleX,
-        scaleY:       fullscreenScaleY,
+        x:            () => geometry.translateX,
+        y:            () => geometry.translateY,
+        scaleX:       () => geometry.scaleX,
+        scaleY:       () => geometry.scaleY,
         borderRadius: 0,
         ease:         'power1.inOut',
         duration:     fillFraction,
@@ -198,8 +207,8 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
 
       if (sunLayer) {
         scrollTimeline.to(sunLayer, {
-          x:        translateX,
-          y:        translateY - SUN_SCROLL_RISE, // sits a little above centre and holds
+          x:        () => geometry.translateX,
+          y:        () => geometry.translateY - SUN_SCROLL_RISE, // sits a little above centre and holds
           scale:    SUN_SCROLL_SCALE,
           ease:     'power1.inOut',
           duration: fillFraction,

@@ -6,6 +6,7 @@ import {
   SPEED_FOR_MAX_RADIUS,
 } from '@/components/effects/FluidCursor/fluidConfig';
 import { createFluidSimulation } from '@/components/effects/FluidCursor/fluidSimulation';
+import { DECK_REVEAL_EVENT, DECK_HIDE_EVENT } from '@/components/sections/ServicesDeck/deckEvents';
 
 const MAX_DEVICE_PIXEL_RATIO = 2;
 const MAX_FRAME_SECONDS = 1 / 60;
@@ -60,6 +61,15 @@ export function useFluidCursor(
     );
     visibilityObserver.observe(inkCanvas);
 
+    // The trail is the hero's alone. While the fleet is up (the hero stays pinned, so the
+    // IntersectionObserver still reports "visible") we stop splatting, so no new ink is laid and
+    // the existing trail dissipates away — the cursor leaves no trail over the services section.
+    let inServices = false;
+    const onServicesEnter = () => { inServices = true; };
+    const onServicesLeave = () => { inServices = false; };
+    window.addEventListener(DECK_REVEAL_EVENT, onServicesEnter);
+    window.addEventListener(DECK_HIDE_EVENT, onServicesLeave);
+
     // ── Pointer tracking ──────────────────────────────────────────────
     let hasLastPointer = false;
     let lastClientX = 0;
@@ -67,7 +77,7 @@ export function useFluidCursor(
     let lastPointerTime = 0;
 
     const handlePointerMove = (clientX: number, clientY: number) => {
-      if (!isHeroVisible) return;
+      if (!isHeroVisible || inServices) return;
       const now = performance.now();
       const uvX = clientX / window.innerWidth;
       const uvY = 1 - clientY / window.innerHeight;
@@ -149,6 +159,8 @@ export function useFluidCursor(
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('resize', resizeCanvases);
+      window.removeEventListener(DECK_REVEAL_EVENT, onServicesEnter);
+      window.removeEventListener(DECK_HIDE_EVENT, onServicesLeave);
       simulation.dispose();
     };
   }, [inkCanvasRef, invertCanvasRef]);

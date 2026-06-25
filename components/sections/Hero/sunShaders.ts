@@ -35,6 +35,11 @@ export const SUN_FRAGMENT_SHADER = /* glsl */ `
   uniform float uNoiseScale;  // size of the convection cells
   uniform float uFlowSpeed;   // how fast the surface boils
   uniform float uContrast;    // granulation contrast
+  uniform float uIntensity;   // 0 = calm hero sun, 1 = big/rapid services sun (drives flares + contrast)
+
+  // Services-only drama: extra flare energy (reads as explosions) and harder granulation.
+  const float SERVICES_FLARE_BOOST    = 2.6;
+  const float SERVICES_CONTRAST_BOOST = 0.5;
 
   // ── Convection / churn tuning ──────────────────────────────────────
   const int   FBM_OCTAVES        = 5;
@@ -146,7 +151,7 @@ export const SUN_FRAGMENT_SHADER = /* glsl */ `
     // 2. Granulation — layered noise gives the boiling convection cells.
     float granulation = fbm(churned + vec3(flow * 0.15, -flow * 0.1, flow * 0.05));
     float heat = clamp(granulation * 0.5 + 0.5, 0.0, 1.0);
-    heat = pow(heat, uContrast);
+    heat = pow(heat, uContrast + uIntensity * SERVICES_CONTRAST_BOOST);
 
     // 3. Surface flares — sharp, faster-moving hot spots layered over the body.
     float flarePattern = fbm(churned * FLARE_FREQUENCY - vec3(flow * 0.3));
@@ -155,7 +160,7 @@ export const SUN_FRAGMENT_SHADER = /* glsl */ `
     // 4. Map heat onto the star's colour ramp: deep trough → cyan body → white-hot.
     vec3 color = mix(uColorDeep, uColorMid, smoothstep(HEAT_DEEP_EDGE, HEAT_MID_EDGE, heat));
     color = mix(color, uColorCore, smoothstep(HEAT_MID_EDGE, 1.0, heat));
-    color += uColorCore * flares * FLARE_INTENSITY;
+    color += uColorCore * flares * FLARE_INTENSITY * (1.0 + uIntensity * SERVICES_FLARE_BOOST);
 
     // 5. Limb darkening, then add a thin hot chromosphere rim back at the edge so
     //    the silhouette glows rather than going flat — fresnel against the camera.

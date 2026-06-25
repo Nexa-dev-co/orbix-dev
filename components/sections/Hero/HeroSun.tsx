@@ -2,9 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { measureUntransformedRect } from '@/lib/measureUntransformedRect';
 import { REVEAL_EVENT } from '@/components/effects/IntroSequence/introEvents';
+import { DECK_REVEAL_EVENT, DECK_HIDE_EVENT } from '@/components/sections/ServicesDeck/deckEvents';
 
 // The single blue sun for the whole page. It lives here (not in the hero card and
 // not in the loader) so exactly one WebGL sun exists: the intro flies it from the
@@ -14,6 +16,13 @@ const SunCanvas = dynamic(() => import('./SunCanvas'), { ssr: false });
 const HERO_SQUARE_SELECTOR = '.hero-sun-card';
 const Z_DURING_INTRO = 10001; // above the loader veil (10000) so the sun shows in the "o"
 const Z_AFTER_INTRO = 9500; //   above the fluid cursor (9000/9001), below the navbar (9999)
+// In the services section the sun drops BEHIND the hero so the fleet + labels sit in front of
+// it (the intervening layers go transparent via .is-services — see globals.css).
+const Z_SERVICES = -1;
+
+// Services-only: the sun swells into a big background and (in SunCanvas) churns faster.
+const SERVICES_SUN_SCALE = 3.2;
+const SERVICES_SUN_RAMP_SECONDS = 1.1;
 
 // Resize handling: hide the sun while the window is being resized, then re-place + fade it back
 // in once it settles. RESIZE_SETTLE_MS is the debounce that defines "done resizing".
@@ -22,9 +31,11 @@ const RESIZE_FADE_SECONDS = 0.35;
 
 export default function HeroSun() {
   const layerRef = useRef<HTMLDivElement>(null);
+  const flightRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const layer = layerRef.current;
+    const flight = flightRef.current;
     if (!layer) return;
 
     // Keep the outer layer parked over the hero square's footprint. The inner
@@ -95,9 +106,39 @@ export default function HeroSun() {
     };
     window.addEventListener('resize', handleResize);
 
+    // Services-only: when the fleet reveals, drop the sun behind the hero (so ships + labels sit
+    // in front) and swell it into a big background; reverse it when the fleet hides. The faster
+    // churn / explosions live in SunCanvas, which listens to the same events.
+    const onServicesEnter = () => {
+      layer.style.zIndex = String(Z_SERVICES);
+      if (flight) {
+        gsap.to(flight, {
+          scale: SERVICES_SUN_SCALE,
+          duration: SERVICES_SUN_RAMP_SECONDS,
+          ease: 'power2.inOut',
+          overwrite: true,
+        });
+      }
+    };
+    const onServicesLeave = () => {
+      layer.style.zIndex = String(Z_AFTER_INTRO);
+      if (flight) {
+        gsap.to(flight, {
+          scale: 1,
+          duration: SERVICES_SUN_RAMP_SECONDS,
+          ease: 'power2.inOut',
+          overwrite: true,
+        });
+      }
+    };
+    window.addEventListener(DECK_REVEAL_EVENT, onServicesEnter);
+    window.addEventListener(DECK_HIDE_EVENT, onServicesLeave);
+
     return () => {
       window.removeEventListener(REVEAL_EVENT, onReveal);
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener(DECK_REVEAL_EVENT, onServicesEnter);
+      window.removeEventListener(DECK_HIDE_EVENT, onServicesLeave);
       window.clearTimeout(settleTimer);
     };
   }, []);
@@ -120,6 +161,7 @@ export default function HeroSun() {
       }}
     >
       <div
+        ref={flightRef}
         className="hero-sun-flight"
         style={{ width: '100%', height: '100%', transformOrigin: 'center center', willChange: 'transform' }}
       >

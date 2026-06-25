@@ -3,11 +3,25 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { SUN_VERTEX_SHADER, SUN_FRAGMENT_SHADER } from './sunShaders';
+import { DECK_REVEAL_EVENT, DECK_HIDE_EVENT } from '@/components/sections/ServicesDeck/deckEvents';
 
 const SUN_RADIUS     = 0.76;
 const CAMERA_FOV     = 35;
 const CAMERA_Z       = 3;
 const ROTATION_SPEED = 0.0018;
+
+// ── Services-only energy ──────────────────────────────────────────────
+// In the services section the sun swells and renders at high resolution (so it stays crisp at
+// the big size), and its spin follows a rhythm: calm for SUN_IDLE_SECONDS, then a quick fast
+// spin for SUN_SPIN_SECONDS, repeating. `intensity` ramps 0→1 on DECK_REVEAL_EVENT and back on
+// DECK_HIDE_EVENT; everywhere else the sun stays calm and low-res.
+const INTENSITY_LERP        = 0.05; // how fast it eases into / out of the energised state
+const SUN_IDLE_SECONDS      = 10;   // calm stretch before each fast spin
+const SUN_SPIN_SECONDS      = 2;    // length of the fast spin
+const SUN_SPIN_SPEEDUP      = 9;    // how much faster it spins/churns during the spin window
+const SUN_SPIN_RAMP_SECONDS = 0.35; // ease in/out of the spin so it isn't a hard switch
+const SERVICES_RENDER_SCALE = 3.5;  // backing-resolution multiplier in services (keep ≥ HeroSun's SERVICES_SUN_SCALE so the enlarged sun stays sharp)
+const MAX_FRAME_SECONDS     = 0.05; // clamp dt so a tab-restore doesn't fling the surface
 
 // Procedural plasma-star surface (see sunShaders.ts). A hot star is genuinely
 // photorealistic in this blue/cyan range, so this stays on-brand while reading
@@ -50,6 +64,7 @@ export default function SunCanvas() {
       uNoiseScale: { value: NOISE_SCALE },
       uFlowSpeed:  { value: FLOW_SPEED },
       uContrast:   { value: SURFACE_CONTRAST },
+      uIntensity:  { value: 0 },
     };
 
     const sunGeo = new THREE.SphereGeometry(SUN_RADIUS, 64, 64);
@@ -61,33 +76,84 @@ export default function SunCanvas() {
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
     scene.add(sunMesh);
 
+    // ── Resize (also re-applied on services enter/leave to change the render resolution) ──
+    let renderScale = 1; // 1 = calm/low-res; SERVICES_RENDER_SCALE in services so the big sun is crisp
+    const applySize = () => {
+      const width  = canvas.clientWidth  || canvas.offsetWidth;
+      const height = canvas.clientHeight || canvas.offsetHeight;
+      if (!width || !height) return;
+      // Backing store = CSS size × DPR × renderScale. In services the layer is CSS-scaled up, so
+      // the extra backing resolution keeps the enlarged sun sharp instead of upscaling a small one.
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * renderScale);
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    };
+    const observer = new ResizeObserver(applySize);
+    observer.observe(canvas.parentElement ?? canvas);
+
+    // ── Services energy state ──────────────────────────────────────
+    let targetIntensity = 0;
+    const energise = () => {
+      targetIntensity = 1;
+      renderScale = SERVICES_RENDER_SCALE; // render at high res so the enlarged sun stays sharp
+      applySize();
+    };
+    const deEnergise = () => {
+      targetIntensity = 0;
+      renderScale = 1;
+      applySize();
+    };
+    window.addEventListener(DECK_REVEAL_EVENT, energise);
+    window.addEventListener(DECK_HIDE_EVENT, deEnergise);
+
     // ── Render loop ────────────────────────────────────────────────
     const clock = new THREE.Clock();
+    let flowTime = 0;   // "surface time"; sprints during the fast-spin window so the plasma churns faster
+    let intensity = 0;  // eased toward targetIntensity each frame
+    let cycleTime = 0;  // position within the idle→spin rhythm (only advances while energised)
     let rafId: number;
     const animate = () => {
       rafId = requestAnimationFrame(animate);
-      sunMesh.rotation.y += ROTATION_SPEED;
-      sunUniforms.uTime.value = clock.getElapsedTime();
+      const deltaSeconds = Math.min(clock.getDelta(), MAX_FRAME_SECONDS);
+
+      intensity += (targetIntensity - intensity) * INTENSITY_LERP;
+
+      // Spin rhythm: calm through the idle stretch, then a fast spin, repeating. Reset the cycle
+      // whenever we're not energised so services always opens with the calm stretch.
+      if (intensity > 0.001) {
+        cycleTime += deltaSeconds;
+      } else {
+        cycleTime = 0;
+      }
+      const cyclePosition = cycleTime % (SUN_IDLE_SECONDS + SUN_SPIN_SECONDS);
+      let spinEnvelope = 0;
+      if (cyclePosition > SUN_IDLE_SECONDS) {
+        const intoSpin = cyclePosition - SUN_IDLE_SECONDS; // 0..SUN_SPIN_SECONDS
+        // trapezoid: ramp up over RAMP, hold fast, ramp down over RAMP
+        spinEnvelope = Math.max(
+          0,
+          Math.min(1, Math.min(intoSpin, SUN_SPIN_SECONDS - intoSpin) / SUN_SPIN_RAMP_SECONDS),
+        );
+      }
+
+      // At rest (intensity 0, or the idle stretch) the multiplier is 1, so the hero/intro sun is
+      // unchanged and the services sun only sprints during the spin window.
+      const speedMultiplier = 1 + intensity * spinEnvelope * SUN_SPIN_SPEEDUP;
+      flowTime += deltaSeconds * speedMultiplier;
+      sunMesh.rotation.y += ROTATION_SPEED * speedMultiplier;
+
+      sunUniforms.uTime.value = flowTime;
+      sunUniforms.uIntensity.value = intensity;
       renderer.render(scene, camera);
     };
     animate();
 
-    // ── Resize ────────────────────────────────────────────────────
-    const handleResize = () => {
-      const canvasWidth  = canvas.clientWidth;
-      const canvasHeight = canvas.clientHeight;
-      if (canvasWidth === 0 || canvasHeight === 0) return;
-      camera.aspect = canvasWidth / canvasHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(canvasWidth, canvasHeight, false);
-    };
-
-    const observer = new ResizeObserver(handleResize);
-    observer.observe(canvas.parentElement ?? canvas);
-
     return () => {
       cancelAnimationFrame(rafId);
       observer.disconnect();
+      window.removeEventListener(DECK_REVEAL_EVENT, energise);
+      window.removeEventListener(DECK_HIDE_EVENT, deEnergise);
       renderer.dispose();
       sunGeo.dispose();
       sunMat.dispose();

@@ -553,6 +553,32 @@ body {
   text-align: center;
 }
 
+/* ─── Services-only layering (fleet on screen) ───────────────────── */
+/* While the fleet is up, the shared sun drops BEHIND the hero (HeroSun sets its z to a
+   negative value on services-enter) so the ships and the labels sit in front of it. For the
+   sun to read as the big background, the layers between it and the fleet go transparent: the
+   hero's cream bg, the black square fill, and the deck's black backdrop. Everything reverts
+   when you scroll back to the fill, so the intro and the square-fill phase are untouched. */
+.hero-section.is-services {
+  background: transparent;
+}
+.hero-section.is-services .hero-sun-fill {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.hero-section.is-services .deck-backdrop {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+/* The hero headline ("we build worlds") and tagline belong to the hero only — fade them out in
+   services so they don't bleed through the (transparent) fleet layers. The square itself is not
+   a .hero-mask, so it stays as the sun's backdrop. */
+.hero-section.is-services .hero-mask,
+.hero-section.is-services .hero-sub {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
 /* ─── Services — The Fleet (/services) ───────────────────────────── */
 
 /* Single cinematic screen: full-bleed WebGL vessel behind, index overlaid left. */

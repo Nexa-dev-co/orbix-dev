@@ -213,3 +213,70 @@ Single-shared-sun contract; the `.hero-sun-layer` (base + scroll transform) vs
 > **Sequencing:** Edit 1 and Edit 2b both touch `useHeroAnimation` + `HeroSun`. Do Edit 1
 > first (it restructures the pin), then 2b (resize-safety) on top of the new single-pin
 > geometry, then 2a (pure CSS units) last so it's measured against final layout.
+
+---
+
+## Edit 3 — Services sun (big + rapid) and section layering
+
+**Status:** `implemented` — typecheck + `next build` pass; **awaiting visual review**.
+Scoped to the services section only (an `is-services` class on `.hero-section`, toggled exactly
+on fleet reveal/hide) — the intro and the square-fill phase are untouched. Prep for turning the
+sun into a black hole later.
+
+### Requirements
+1. In services the sun becomes **big and rapid** — faster churn/spin, sudden speed surges that
+   ramp up "out of nowhere" and ease back, and stronger flares (explosions).
+2. **Text z-index above the sun** (services only).
+3. **Spaceship + landing pad above the sun, below the text** (services only).
+
+### Clean approach
+- New event `DECK_HIDE_EVENT` (in `deckEvents.ts`) pairs with `DECK_REVEAL_EVENT`.
+  `useHeroAnimation` fires them and toggles `is-services` on the hero in `revealDeck`/`hideDeck`.
+- **Layering (2 & 3):** on services-enter, `HeroSun` drops the sun's z-index **behind the hero**
+  (`Z_SERVICES = -1`); CSS `.is-services` makes the layers between the fleet and the sun
+  transparent (hero bg, `.hero-sun-fill`, `.deck-backdrop`) so the sun reads as the big
+  background with ships (deck canvas) and labels (deck overlay) painting in front. Reverts on
+  leave. So order becomes **text > ships/pad > sun**.
+- **Big (1):** `HeroSun` scales `.hero-sun-flight` to `SERVICES_SUN_SCALE = 3.2` on enter, back
+  to 1 on leave (the intro owns the flight earlier, but it's idle by services, so no conflict).
+- **Rapid + explosions (1):** `SunCanvas` ramps a `uIntensity` uniform 0→1 on the same events.
+  The render loop drives an accelerated `flowTime` with a base speed-up (`RAPID_BASE_SPEEDUP`)
+  plus random decaying **bursts** (`BURST_SPEEDUP`, every `BURST_INTERVAL_MIN/MAX_S`) for the
+  "sudden surge" feel; `uIntensity` boosts flares + contrast in `sunShaders.ts`. At intensity 0
+  the multiplier is exactly 1, so the hero/intro sun is unchanged.
+
+### Files
+`components/sections/ServicesDeck/deckEvents.ts`, `lib/hooks/useHeroAnimation.ts`,
+`app/globals.css`, `components/sections/Hero/HeroSun.tsx`,
+`components/sections/Hero/SunCanvas.tsx`, `components/sections/Hero/sunShaders.ts`.
+
+### Tuning knobs
+`SERVICES_SUN_SCALE`, `SERVICES_SUN_RAMP_SECONDS` (HeroSun); `RAPID_BASE_SPEEDUP`,
+`BURST_SPEEDUP`, `BURST_DECAY`, `BURST_INTERVAL_MIN/MAX_S`, `INTENSITY_LERP` (SunCanvas);
+`SERVICES_FLARE_BOOST`, `SERVICES_CONTRAST_BOOST` (sunShaders); the `0.5s` transparency
+transitions (globals.css).
+
+### ⚠ Flags for review
+- "Big" is a **CSS scale** on the flight, so the (small) WebGL canvas is upscaled — the plasma
+  is soft so it should read fine, but if it looks blurry at 3.2× I'll switch to a bigger canvas
+  / camera zoom so it stays crisp.
+- Confirm the transition from "full-black fill" into "sun-as-background" reads cleanly (both are
+  near-black, so it should be seamless) and that the sun sits behind the ships as intended.
+
+### Refinements (post-review)
+- ✅ **Sun motion rhythm.** Replaced the constant fast churn + random bursts (looked bad) with a
+  rhythm: **calm for `SUN_IDLE_SECONDS = 10`, then a fast spin for `SUN_SPIN_SECONDS = 2`**,
+  repeating (trapezoid ease via `SUN_SPIN_RAMP_SECONDS`). During idle the multiplier is 1 (same
+  calm motion as the hero); the surge only happens in the spin window.
+- ✅ **Large canvas (sharp, not upscaled).** On services-enter `SunCanvas` bumps its backing
+  resolution (`SERVICES_RENDER_SCALE = 3.5`, via `setPixelRatio`), so the enlarged sun renders
+  crisp. `HeroSun` still does the smooth CSS-scale swell; the render-scale stays ≥ that factor.
+- ✅ **Label-click over-scroll fixed.** Clicking a craft used to scroll to the exact fill/reveal
+  edge and read as hiding the section. Craft now live in `[carouselStart, 1]` with `carouselStart`
+  a touch past the fill (`CAROUSEL_SETTLE_FRACTION = 0.08`), so jumping to craft 0 lands on the
+  fully-revealed fleet. `goTo`, snap, and index mapping all share that range.
+- ✅ **Cursor trail is hero-only.** `useFluidCursor` stops splatting on `DECK_REVEAL_EVENT` and
+  resumes on `DECK_HIDE_EVENT`, so no trail is laid over services and the existing one dissipates.
+- ✅ **"we build worlds" + tagline are hero-only.** `.hero-section.is-services .hero-mask,
+  .hero-sub` fade to 0 so they don't bleed through the transparent fleet layers (the square isn't
+  a `.hero-mask`, so it stays as the sun's backdrop).

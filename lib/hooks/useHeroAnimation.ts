@@ -5,7 +5,11 @@ import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { prefersReducedMotion } from '@/lib/prefersReducedMotion';
 import { measureUntransformedRect } from '@/lib/measureUntransformedRect';
 import { REVEAL_EVENT } from '@/components/effects/IntroSequence/introEvents';
-import { DECK_REVEAL_EVENT } from '@/components/sections/ServicesDeck/deckEvents';
+import { DECK_REVEAL_EVENT, DECK_HIDE_EVENT } from '@/components/sections/ServicesDeck/deckEvents';
+
+// Marks the hero while the fleet is on screen. Scopes the services-only layering (sun drops
+// behind the fleet, intervening layers go transparent) so it never touches the fill phase.
+const SERVICES_CLASS = 'is-services';
 
 gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
 // A mobile address bar showing/hiding fires a resize on almost every scroll. Don't re-pin /
@@ -30,6 +34,9 @@ const DECK_REVEAL_DURATION = 0.6;
 const DECK_HIDE_DURATION   = 0.4;
 const GOTO_DURATION        = 0.6; // programmatic scroll when a label/flick jumps to a craft
 const SNAP_DURATION        = 0.5; // how quickly the carousel settles onto the nearest craft
+// The carousel craft start a touch *past* the fill, so jumping to craft 0 lands on the fully
+// revealed fleet instead of the fill/transition edge (which read as the section scrolling away).
+const CAROUSEL_SETTLE_FRACTION = 0.08;
 
 // ── Reveal (runs when the intro lands the sun in the square) ───────────
 const TEXT_WIPE_DURATION   = 0.9;
@@ -77,6 +84,9 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
     const totalVh      = FILL_SCROLL_VH + steps * CRAFT_SCROLL_VH;
     // The fraction of the pin the square-fill occupies; the carousel owns the rest.
     const fillFraction = FILL_SCROLL_VH / totalVh;
+    // Craft sit in [carouselStart, 1] — a touch past the fill so craft 0 isn't on the reveal edge.
+    const carouselStart = fillFraction + (1 - fillFraction) * CAROUSEL_SETTLE_FRACTION;
+    const carouselSpan  = 1 - carouselStart;
 
     const textInners = heroSection.querySelectorAll('.hero-mask-inner');
     const squareFill = heroSection.querySelector('.hero-sun-fill');
@@ -96,6 +106,8 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
     const revealDeck = () => {
       if (deckRevealed) return;
       deckRevealed = true;
+      // Flip into the services-only layering (sun behind the fleet, intervening layers clear).
+      heroSection.classList.add(SERVICES_CLASS);
       if (deck) {
         gsap.to(deck, {
           autoAlpha: 1,
@@ -104,12 +116,14 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
           overwrite: true,
         });
       }
-      // Tell the scene to (re)play the centred craft's entrance in step with the reveal.
+      // Tell the scene to (re)play the centred craft's entrance + switch the sun to its big/rapid
+      // services look in step with the reveal.
       window.dispatchEvent(new Event(DECK_REVEAL_EVENT));
     };
     const hideDeck = () => {
       if (!deckRevealed) return;
       deckRevealed = false;
+      heroSection.classList.remove(SERVICES_CLASS);
       if (deck) {
         gsap.to(deck, {
           autoAlpha: 0,
@@ -118,14 +132,16 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
           overwrite: true,
         });
       }
+      // Return the sun to its calm hero look + front position.
+      window.dispatchEvent(new Event(DECK_HIDE_EVENT));
     };
 
     // Free scrub through the fill, then snap to the nearest craft in the carousel range.
     const snapProgress = (value: number) => {
-      if (value <= fillFraction) return value;
-      const carouselProgress = (value - fillFraction) / (1 - fillFraction);
+      if (value <= carouselStart) return value; // free scrub through the fill + settle zone
+      const carouselProgress = (value - carouselStart) / carouselSpan;
       const snapped = Math.round(carouselProgress * steps) / steps;
-      return fillFraction + snapped * (1 - fillFraction);
+      return carouselStart + snapped * carouselSpan;
     };
 
     // 2. The single pin — built lazily at reveal, never on mount. While the loader plays
@@ -180,8 +196,8 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
 
             if (progress >= fillFraction) {
               revealDeck();
-              const carouselProgress = (progress - fillFraction) / (1 - fillFraction);
-              const craft = Math.round(gsap.utils.clamp(0, 1, carouselProgress) * steps);
+              const carouselProgress = gsap.utils.clamp(0, 1, (progress - carouselStart) / carouselSpan);
+              const craft = Math.round(carouselProgress * steps);
               if (craft !== lastCraft) {
                 lastCraft = craft;
                 setActiveCraftRef.current(craft);
@@ -267,7 +283,7 @@ export function useHeroAnimation(heroAnimationRefs: HeroAnimationRefs) {
         setActiveCraftRef.current(clampedIndex);
         return;
       }
-      const targetProgress = fillFraction + (clampedIndex / steps) * (1 - fillFraction);
+      const targetProgress = carouselStart + (clampedIndex / steps) * carouselSpan;
       const targetScroll   = trigger.start + targetProgress * (trigger.end - trigger.start);
       gsap.to(window, {
         scrollTo:  targetScroll,

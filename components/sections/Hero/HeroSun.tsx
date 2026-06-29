@@ -20,8 +20,10 @@ const Z_AFTER_INTRO = 9500; //   above the fluid cursor (9000/9001), below the n
 // it (the intervening layers go transparent via .is-services — see globals.css).
 const Z_SERVICES = -1;
 
-// Services-only: the sun swells into a big background and (in SunCanvas) churns faster.
-const SERVICES_SUN_SCALE = 3.2;
+// Services-only: the sun drops behind the fleet but keeps its normal size (no swell) — only
+// its churn/energy changes (in SunCanvas). SERVICES_SUN_SCALE stays a knob if a swell is ever
+// wanted again; at 1 the services sun matches the hero sun's size.
+const SERVICES_SUN_SCALE = 1;
 const SERVICES_SUN_RAMP_SECONDS = 1.1;
 
 // Resize handling: hide the sun while the window is being resized, then re-place + fade it back

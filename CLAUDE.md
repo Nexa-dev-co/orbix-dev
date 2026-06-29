@@ -295,14 +295,14 @@ orbix is a cinematic, single-page **web-studio portfolio**: a long-scroll homepa
 
 **Animation & graphics:**
 
-- `GSAP` + `ScrollTrigger` (via `@gsap/react`'s `useGSAP`) — scroll-driven reveals, character/text effects, timeline sequencing
-- `Lenis` — smooth inertial scrolling, driven from the GSAP ticker so ScrollTrigger stays in sync
-- `Three.js` — WebGL scenes (hero canvas, work-card canvas, the 3D orbital-map prototype)
-- `ogl` — lightweight WebGL for shader-based effects (e.g. `ShaderTransition`)
+- `gsap` + `gsap/ScrollTrigger` + `gsap/ScrollToPlugin` — imported and used **directly** (no `@gsap/react` / `useGSAP` wrapper, no scoped `useGsap` hook). Scroll-driven pins, scrubs, timelines, snapping. Each animation lives in its own hook under `lib/hooks/` (`useHeroAnimation`, `useNavbarAnimation`) or co-located with its scene (`useServicesDeck`).
+- `Three.js` — WebGL scenes: the shared sun (`SunCanvas`) and the homepage services fleet (`useServicesDeck`).
 
-**Icons:** `lucide-react`
+**Icons:** `lucide-react` (a dependency; reach for it when an icon is needed).
 
-**Dev tooling:** `lil-gui` — runtime tweak panels while tuning shaders/scenes (never shipped in a visible/default-on state)
+**Dev tooling:** `lil-gui` — a dependency for runtime tweak panels while tuning shaders/scenes (never shipped in a visible/default-on state).
+
+> **Listed-but-unused dependencies (do not assume they're wired in):** `lenis` (smooth scroll), `ogl`, and `@gsap/react` are in `package.json` but currently imported **nowhere**. The site uses **native scroll** today — there is no Lenis instance, no GSAP-ticker-driven scroll loop. If you need smooth scroll, wire Lenis up deliberately; don't write code that assumes it already exists.
 
 There is **no** shadcn/ui, Framer Motion, form library, or validation library in this project. Don't introduce one without being asked.
 
@@ -344,97 +344,85 @@ Two fonts, loaded via `next/font/google` in `app/layout.tsx` with `display: "swa
 
 ---
 
-## Loading Screen — Variant System
+## Responsiveness — non-negotiable
 
-Every load of the site is gated behind a fullscreen intro loader. This is orchestrated by `components/effects/PageLoader.tsx`, which:
+**Everything built in this project must be responsive.** No fixed-width layouts, no desktop-only sections, no "we'll do mobile later". Every new section, component, animation, and 3D scene ships working from small phones to large desktops in the same change.
 
-1. Paints an opaque `--bg` cover panel on the first frame / during SSR so there's no content flash.
-2. Resolves **which** loader variant to play, then mounts it.
-3. Unmounts once the active loader calls `onComplete`.
+Follow the patterns already in the codebase:
 
-There are several interchangeable loader variants under `components/loaders/`, each implementing the shared `LoaderProps` contract (`{ onComplete: () => void }`) and each responsible for honouring `prefers-reduced-motion` (resolve fast / skip the animation):
+- **Fluid by default.** Size type, spacing, and layout with `clamp()` / viewport units, not fixed pixels — see the `--fs-*` tokens in `globals.css` and the `clamp(...)` font sizes/padding throughout. Reach for a breakpoint only when fluid scaling alone can't fix the layout.
+- **Breakpoint convention.** The existing stacked-layout breakpoint is `@media (max-width: 51.25em)` (≈820px) — reuse it for consistency unless a component genuinely needs its own.
+- **3D / canvas scenes must reframe, not just stretch.** Update camera aspect on resize, keep subjects framed at portrait aspect ratios, and clamp DPR (`Math.min(devicePixelRatio, 2)`) for performance.
+- **Scroll-driven (pinned/scrubbed) animation must survive resize.** Recompute geometry on `ScrollTrigger` refresh (`invalidateOnRefresh` + function-based tween values), measure base boxes with `measureUntransformedRect` (never a transformed `getBoundingClientRect`), and use `ScrollTrigger.config({ ignoreMobileResize: true })` so a mobile address bar showing/hiding doesn't re-pin or jitter the scene.
+- **Touch matters.** Pointer-driven interactions (drag-to-rotate, flick) should degrade gracefully on touch; scroll/snap and tap-to-select must always work.
+- Verify changes at a narrow viewport before considering them done.
 
-| Key        | Component           | Idea                                     |
-| ---------- | ------------------- | ---------------------------------------- |
-| `orbital`  | `OrbitalTypeLoader` | orbiting type forms into the wordmark    |
-| `kinetic`  | `KineticLoader`     | kinetic typography (current **default**) |
-| `counter`  | `CounterLoader`     | percentage / counter count-up            |
-| `words`    | `WordRevealLoader`  | sequential word reveal                   |
-| `curtain`  | `CurtainLoader`     | panel/curtain wipe reveal                |
-| `stroke`   | `StrokeLoader`      | SVG stroke-draw                          |
-| `scramble` | `ScrambleLoader`    | text-scramble settle                     |
+---
 
-The registry, stable order, and default live in `components/loaders/index.ts` (`LOADERS`, `LOADER_ORDER`, `DEFAULT_LOADER`). Pick a variant without code changes via the URL:
+## Intro Loading Screen
 
-```
-?loader=orbital | kinetic | counter | words | curtain | stroke | scramble
-?loader=1..7     (by position in LOADER_ORDER)
-?loader=random   (random each load)
-```
+Every load of the homepage is gated behind a single fullscreen intro: `components/effects/IntroSequence/IntroSequence.tsx`. It is **one component running one GSAP timeline** (~6s) — there is **no loader-variant registry, no `?loader=` URL switch, and no `PageLoader` orchestrator**. (Earlier docs described a multi-variant loader system; that does not exist in the code.)
 
-When adding a loader: create `components/loaders/<Name>Loader/<Name>Loader.tsx` implementing `LoaderProps`, then register it in `index.ts` (add to `LOADERS`, `LOADER_ORDER`, and the `LoaderKey` union). Keep variant-specific constants named at the top of the file, never inline.
+The intro: paints an opaque `--bg` veil over the hero, runs a counter → slot-machine word cycle → "orbix" wordmark resolve, then **hands off** by flying the one shared sun from the wordmark's "o" into the hero square. It locks scroll for its entire duration and dispatches `REVEAL_EVENT` (`orbix:reveal`) right before the sun lands — the single "site is ready" signal the hero and navbar wait for. Honours `prefers-reduced-motion` by resolving fast. See the **Intro & Hero Animation Timeline** section below for the contracts that protect it.
 
 ---
 
 ## Project Structure
 
-Single homepage; sections are imported and composed **directly** in `app/page.tsx` — there is **no `View` wrapper component** between a page and its sections.
+**Single-page site.** Everything renders from `app/page.tsx` — there are **no other routes** (a former `/services` page was removed). There is **no `View` wrapper** between the page and its sections. The codebase is intentionally small right now — most of the sections the creative brief envisions (Work, Process, Contact, Footer) are **not built yet**.
 
 ```
 app/
-  layout.tsx          # root layout — fonts, PageLoader, CustomCursor, SmoothScroll, Grain, global CSS
-  globals.css         # design tokens + base/typography/cursor/marquee/transition CSS
-  page.tsx            # homepage — composes the sections directly
-  prototype/
-    page.tsx          # /prototype — orbital-map nav prototype (3D default, ?view=2d fallback)
+  layout.tsx          # root layout — fonts (Syne + DM Sans), Navbar, global CSS
+  globals.css         # design tokens + all component CSS (class-based, not CSS Modules)
+  page.tsx            # the only route — renders <Hero/> + <HeroSun/> + <IntroSequence/>
 
 components/
-  layout/             # Navbar, Footer
-  sections/           # homepage sections — Hero, Marquee, Statement, WorkGrid, Process, CtaBanner
-  effects/            # PageLoader, SmoothScroll, CustomCursor, Grain, ShaderTransition
-  canvas/             # Three.js canvases — HeroCanvas, WorkCardCanvas
-  loaders/            # intro loader variants + index.ts (registry) + types.ts (LoaderProps)
-  ui/                 # small reusable primitives — MagneticButton, SectionDivider
-  prototype/          # orbital-map prototype (kept isolated from the live site)
-    OrbitMap          # 2D SVG version
-    orbit/            # 3D WebGL version — scene, config, sections, journey, shaders, HUD, panel
+  layout/
+    Navbar/           # Navbar.tsx — blended bar + cyan accent layer + per-section scroll meters
+  sections/
+    Hero/             # Hero.tsx (hero + owns the services-deck overlay), HeroSun.tsx, SunCanvas.tsx, sunShaders.ts
+    ServicesDeck/     # homepage services: ServicesDeck.tsx, deckServices.ts, deckEvents.ts,
+                      #   DeckCanvas/DeckCanvas.tsx, hooks/useServicesDeck.ts
+  effects/
+    IntroSequence/    # IntroSequence.tsx + introEvents.ts (REVEAL_EVENT)
+    FluidCursor/      # FluidCursor.tsx + fluidConfig + fluidSimulation (hero ink trail)
 
 lib/
   hooks/
-    useGsap.ts        # scoped GSAP runner (useGSAP) + prefersReducedMotion helper
-    useLenis.ts       # single Lenis instance, driven from the GSAP ticker
-  splitChars.tsx      # SplitChars — wraps each glyph in <span class="char"> for per-letter animation
+    useHeroAnimation.ts    # the hero→services single-pin transition (fill → reveal → carousel)
+    useNavbarAnimation.ts  # navbar entrance + per-section meter positioning
+    useFluidCursor.ts      # drives the FluidCursor WebGL sim + difference-blend invert canvas
+  prefersReducedMotion.ts  # standalone helper — `prefersReducedMotion()` (NOT a hook, NOT inside useGsap)
+  measureUntransformedRect.ts # reads an element's base box with its live transform stripped
 
 public/
-  textures/           # image assets (e.g. planet textures for the prototype)
+  models/             # Draco-compressed .glb vessels (some referenced models are missing — see below)
+  draco/              # Draco decoder (js + wasm) for GLTFLoader
+  textures/           # planet + sun textures
+
+scripts/
+  optimizeModels.mjs  # `npm run optimize:models` — gltf-transform Draco compression
+docs/                 # living handoff docs — services-deck-state.md is the accurate one
 ```
 
 ### Component file convention
 
-- **Each component lives in its own folder named after it**, containing its `.tsx` (and any co-located files it owns — CSS, sub-parts, local config). For example `components/sections/Hero/Hero.tsx`, not a loose `components/sections/Hero.tsx`.
-- The category folders (`layout`, `sections`, `effects`, `canvas`, `loaders`, `ui`, `prototype`) stay as grouping; the per-component folder sits inside its category.
-- Co-locate everything a component owns with it; only promote something to `lib/` when it's shared across components.
+- **Each component lives in its own folder named after it**, containing its `.tsx` plus anything it owns (co-located config, events, sub-hooks, shaders). E.g. `components/sections/Hero/Hero.tsx`, not a loose `Hero.tsx`.
+- Category folders (`layout`, `sections`, `effects`) are grouping only; the per-component folder sits inside its category.
+- A component that owns a WebGL scene co-locates its scene hook (e.g. `ServicesDeck/hooks/useServicesDeck.ts`); cross-component animation hooks live in `lib/hooks/`.
+- Only promote something to `lib/` when it's shared across components.
 
 ---
 
-## Page-by-Page Notes
+## The Page (`/`)
 
-### Homepage (`/`)
+`app/page.tsx` renders just three things: `<Hero/>`, `<HeroSun/>`, and `<IntroSequence/>`. The whole hero→services experience is **one continuous pinned scroll**, not a stack of sections:
 
-Long-scroll composition rendered by `app/page.tsx`, in order:
-`ShaderTransition` → `Navbar` → `Hero` → `Marquee` → `Statement` → `WorkGrid` → `Process` → `CtaBanner` → `Footer`, with `SectionDivider` between sections.
-
-- `Hero` uses a Three.js WebGL canvas background + headline with per-character GSAP reveal (`SplitChars`).
-- `Marquee` is a pure-CSS infinite scroll (see `.marquee` in `globals.css`), pausing on hover.
-- Section reveals use GSAP `ScrollTrigger` via the scoped `useGsap` hook.
-
-### Prototype (`/prototype`)
-
-An orbital-map navigation concept, **isolated from the live site**.
-
-- Default is the **3D** WebGL map (`components/prototype/orbit`), loaded via `next/dynamic` with `ssr: false` so `three` stays out of the server graph.
-- `?view=2d` renders the 2D SVG alternative (`components/prototype/OrbitMap`).
-- Don't let prototype code leak into the homepage bundle.
+- **`Hero`** — cream-coloured hero (`#e2dfd2`): masked headline "we build worlds" where the "o" is the shared sun, tagline "software with its own gravity", and a scoped `FluidCursor` ink trail. The hero section also **owns the `ServicesDeck` overlay**.
+- **`HeroSun`** — the single shared sun for the whole page (one WebGL canvas, `SunCanvas`). The intro flies it from the loader "o" into the hero square; hero scroll then expands it.
+- **`useHeroAnimation`** — one pinned `ScrollTrigger` runs three phases: **(1) fill** (scrubbed: the black square grows to fill the viewport, sun rises), **(2) reveal** (at full fill, the `ServicesDeck` overlay appears on the now-full-black screen, `DECK_REVEAL_EVENT` fires), **(3) carousel** (snapped: scroll cycles the four service "craft"). There is no second pinned section glued on with a margin.
+- **`ServicesDeck`** — landing-pad carousel: one 3D vessel on a pad under a starfield, four services as a bottom strip. Scroll / drag-flick / click-a-name to switch craft. `deckServices.ts` is the single source of truth for the services copy + per-ship model/colours. Detailed tuning lives in `docs/services-deck-state.md`.
 
 ---
 
@@ -476,26 +464,26 @@ function buildScene(sceneOptions: SceneOptions) {}
 
 ### Files
 
-- **`.tsx` files → PascalCase**, named after what they render: `Hero.tsx`, `WorkGrid.tsx`, `MagneticButton.tsx`, `OrbitalTypeLoader.tsx`. A `.tsx` file that exports a component is named after that component (e.g. a file exporting `SplitChars` is `SplitChars.tsx`).
+- **`.tsx` files → PascalCase**, named after what they render: `Hero.tsx`, `Navbar.tsx`, `SunCanvas.tsx`, `IntroSequence.tsx`. A `.tsx` file that exports a component is named after that component.
 - **`.ts` files** keep their idiomatic casing:
-  - **hooks** → `camelCase`, verb-first: `useGsap.ts`, `useLenis.ts`, `useScrollVelocity.ts`.
-  - **utilities / config / data** → `camelCase`, describing what the file does or contains: `formatDate.ts`, `parseFormValues.ts`, `calculateOrbitalPosition.ts` — never `utils.ts` / `helpers.ts` / `misc.ts`.
+  - **hooks** → `camelCase`, verb-first: `useHeroAnimation.ts`, `useNavbarAnimation.ts`, `useServicesDeck.ts`.
+  - **utilities / config / data** → `camelCase`, describing what the file does or contains: `measureUntransformedRect.ts`, `prefersReducedMotion.ts`, `deckServices.ts` — never `utils.ts` / `helpers.ts` / `misc.ts`.
 - File names must describe what the file **does or contains**. If the name alone doesn't tell you what's inside, rename it.
 
 ### Hooks
 
-Verb-first, action-describing names:
+Verb-first, action-describing names. The hooks that actually exist:
 
 ```ts
-useGsap();          // scoped GSAP runner + prefers-reduced-motion gate
-useLenis();         // Lenis smooth-scroll lifecycle, synced to the GSAP ticker
-useScrollVelocity() // derives scroll velocity for motion effects
-useCursorPosition() // tracks cursor position for magnetic / parallax effects
+useHeroAnimation();   // the hero→services single-pin transition (fill → reveal → carousel)
+useNavbarAnimation(); // navbar entrance (on REVEAL_EVENT) + per-section meter positioning
+useFluidCursor();     // drives the hero ink-trail WebGL sim + its difference-blend invert canvas
+useServicesDeck();    // the homepage fleet Three.js scene (co-located in ServicesDeck/hooks/)
 ```
 
 ### Components
 
-PascalCase, named after what they render: `Hero` / `MagneticButton` / `PageLoader` / `SectionDivider`.
+PascalCase, named after what they render: `Hero` / `Navbar` / `IntroSequence` / `ServicesDeck`.
 
 ---
 
@@ -513,14 +501,14 @@ Every animation must feel **purposeful and cinematic**, not decorative.
 
 Rules:
 
-1. **The intro loader gates the site.** Don't bypass it with code edits; compare variants with the `?loader=` URL param.
-2. **Scroll reveals use GSAP `ScrollTrigger`** via the scoped `useGsap` hook — not hand-rolled Intersection Observers. This keeps animation logic centralized and auto-cleaned on unmount.
-3. **Lenis wraps the entire scroll.** It's initialised once (`useLenis`) and driven from the GSAP ticker; ScrollTrigger updates on its `scroll` event. Don't spin up a second scroll loop.
-4. **WebGL canvases render behind content.** Never block scroll or pointer events.
-5. Animations respect `prefers-reduced-motion`. Use the shared helper — `useGsap`'s scoped runner already bails out when reduced motion is requested, and `useLenis` falls back to native scroll:
+1. **The intro (`IntroSequence`) gates the homepage.** It locks scroll and dispatches `REVEAL_EVENT` when the sun lands — don't bypass it with code edits, and don't build hero/sun scroll animation that runs before that event (see Contract 2 below).
+2. **Scroll reveals use GSAP `ScrollTrigger`** in a dedicated hook — not hand-rolled Intersection Observers. Register plugins once (`gsap.registerPlugin(ScrollTrigger, ScrollToPlugin)`) and kill triggers/timelines in the effect cleanup.
+3. **Scroll is native today.** There is no Lenis/smooth-scroll layer wired in. If you add one, do it deliberately and re-sync ScrollTrigger to it — don't assume it already exists.
+4. **WebGL canvases render behind content.** Never block scroll or pointer events (the one exception: the deck canvas accepts the pointer for dragging the craft).
+5. Animations respect `prefers-reduced-motion`. Use the standalone helper, then gate decorative motion behind it:
 
 ```ts
-import { prefersReducedMotion } from "@/lib/hooks/useGsap";
+import { prefersReducedMotion } from "@/lib/prefersReducedMotion";
 
 if (!prefersReducedMotion()) {
   // run decorative GSAP / WebGL motion
@@ -570,8 +558,8 @@ No JSDoc on every function. Only add JSDoc where a utility is genuinely reusable
 
 - Prefer `interface` for object shapes, `type` for unions and computed types.
 - No `any`. Use `unknown` and narrow it.
-- Type shared contracts explicitly and export them (e.g. `LoaderProps` in `components/loaders/types.ts`); derive registry key unions from them (`LoaderKey`).
-- Generic hooks should be parameterised over the element type where it helps callers (e.g. `useGsap<HTMLElement>()`).
+- Type shared contracts explicitly and export them (e.g. `DeckService` in `deckServices.ts`, the `*Refs` interfaces the animation hooks accept).
+- Generic hooks should be parameterised over the element type where it helps callers.
 
 ---
 
@@ -683,8 +671,10 @@ How it's wired, so a section "just works" once built:
 
 Current keys: `home` → hero (wired). `work` / `process` / `contact` → their homepage
 sections (just set the var when those are built — no navbar changes needed). `services`
-points at a separate page (`/services`), so it has no scroll meter; treat its line as an
-active/hover state if you want one.
+is the deck overlay that lives inside the hero: its nav link has `href="/#services"` but on
+the homepage `handleNavClick` intercepts it and dispatches `GOTO_SERVICES_EVENT`, which the
+hero pin listens for and scrolls to the revealed fleet (a plain anchor would just jump to the
+top of the hero). Its meter isn't fed yet — wire it from the carousel phase if you want one.
 
 ---
 

@@ -3,10 +3,15 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import gsap from 'gsap';
 import { prefersReducedMotion } from '@/lib/prefersReducedMotion';
 import { DECK_SERVICES } from '../deckServices';
 import { DECK_REVEAL_EVENT } from '../deckEvents';
+import { applyHullMaterials, rimColorOf, type HullShaderUniforms } from '../hullMaterial';
 
 // ── Framing ─────────────────────────────────────────────────────────────
 const CAMERA_FOV      = 34;
@@ -39,8 +44,9 @@ const DRACO_DECODER_PATH = '/draco/';
 const TARGET_SIZE = 2.3;  // largest dimension every vessel is normalised to
 const BASE_YAW    = -0.6; // resting 3/4 view so hulls don't read flat-on
 const SHIP_HOVER  = 0.05; // resting height the centred craft sits above the pad (was floating high)
-const FLOAT_AMPLITUDE = 0.06; // gentle hover bob on the centred craft
+const FLOAT_AMPLITUDE = 0.1;   // vertical hover bob (up + down) on the centred craft
 const FLOAT_SPEED     = 1.1;
+const AUTO_ROTATE_SPEED = 0.35; // radians/sec — slow showroom turntable spin on the centred craft
 
 // ── Contact shadow (one soft blob on the pad, under the centred craft) ──
 const SHADOW_TEXTURE_PX = 256;
@@ -50,24 +56,34 @@ const SHADOW_LIFT       = 0.01; // nudge above the pad to avoid z-fighting
 
 // ── Lighting (shared stage rig; the centred craft is always powered) ──
 const KEY_LIGHT_COLOR      = 0xfff2e2; // warm key so the hull reads with its own colour, not washed cold
-const KEY_LIGHT_INTENSITY  = 2.6;      // stronger + directional → reveals the surface/normal detail
+const KEY_LIGHT_INTENSITY  = 2.4;      // directional → reveals the surface/normal detail
 const FILL_LIGHT_COLOR     = 0x9aa7bb; // neutral cool fill
 const FILL_LIGHT_INTENSITY = 0.5;
-const RIM_LIGHT_COLOR      = 0x00e5ff; // Orbix cyan edge — an accent, not a wash
-const RIM_LIGHT_INTENSITY  = 0.7;
+const RIM_LIGHT_INTENSITY  = 0.8;      // a cyan-ish edge by default; recoloured per ship (see applyRimColor)
 const AMBIENT_INTENSITY    = 0.16;     // low so the directional key carves out contrast/texture
-const ENV_MAP_INTENSITY    = 1.2;      // a touch more environment reflection so metal/panels read
 const TONE_MAPPING_EXPOSURE = 1.18;
+// The active ship's edge light eases to the ship's own rim colour, so each craft feels lit for itself.
+const RIM_LIGHT_TWEEN = 0.5;
 
 // ── Powered-on look ──
-// Each hull wears a two-colour fresnel mix (colorCore facing the camera → colorEdge at grazing
-// angles, per ship in deckServices). The centred craft sits bright with its internal emissive on;
-// a craft leaving the pad dims back as it fades. No external lamp touches the hull — it stays lit
-// from above by the shared key light.
-const FRESNEL_POWER          = 2.2; // higher → the edge colour hugs the silhouette more tightly
-const DORMANT_BRIGHTNESS     = 0.5; // hull multiplier as a craft leaves the pad (dim)
-const ACTIVE_BRIGHTNESS      = 1.2; // hull multiplier on the centred craft (bright)
-const LIT_EMISSIVE_INTENSITY = 1.3; // the model's own internal lights when centred
+// Each hull wears a graded-palette shader (see hullMaterial.ts): the model's own albedo luminance
+// is mapped onto the ship's shadow/hull/highlight tones, so it stays multi-tonal. The centred craft
+// sits bright; a craft leaving the pad dims back as it fades. The accent glow + rim live in the
+// shader; here we only drive the shared brightness uniform + the native emissive intensity.
+const DORMANT_BRIGHTNESS     = 0.4; // hull brightness as a craft leaves the pad (dim)
+const ACTIVE_BRIGHTNESS      = 1.0; // hull brightness on the centred craft
+const LIT_EMISSIVE_INTENSITY = 1.3; // any native emissive map's intensity when centred
+
+// ── Engine glow pulse (centred craft only) ──
+const EMIT_PULSE_AMPLITUDE = 0.22; // ± on the accent-glow strength
+const EMIT_PULSE_SPEED     = 1.6;
+
+// ── Selective bloom (threshold so only the bright accents/highlights glow) ──
+const BLOOM_STRENGTH       = 0.85;
+const BLOOM_STRENGTH_LOW   = 0.5;  // gentler on low-power devices
+const BLOOM_RADIUS         = 0.5;
+const BLOOM_THRESHOLD      = 0.7;
+const BLOOM_MSAA_SAMPLES   = 4;    // MSAA on the composer target (antialias:true is ignored once a composer renders)
 
 // ── Carousel swap (single pad: the current craft flies off, THEN the next flies on) ──
 // The two halves are sequenced — the outgoing craft fully clears the pad before the incoming one
@@ -92,6 +108,9 @@ const DRAG_PITCH_CLAMP       = 0.45;
 const SPRING_DURATION        = 0.9;   // ease back to the resting view on release
 const FLICK_DISTANCE_PX      = 110;   // horizontal travel past this (and horizontally dominant) = a switch
 
+// Coarse pointer or a small viewport → the lighter render path (no clearcoat/iridescence, softer bloom).
+const LOW_POWER_MAX_WIDTH = 760;
+
 export interface DeckStatus {
   isLoading: boolean;
   /** 0–100 while loading, 100 when the fleet is in. */
@@ -115,18 +134,14 @@ interface DeckShip {
   lift: THREE.Group;
   spin: THREE.Group;
   materials: THREE.Material[];
-  /** The hull's two mix colours (core → edge), applied as a fresnel blend in the shader. */
-  colorCore: THREE.Color;
-  colorEdge: THREE.Color;
+  /** Shared across this ship's hull materials → driven by litState (dim when leaving, bright when centred). */
+  brightnessUniform: { value: number };
+  /** Shared engine-glow breathing — modulated on the centred craft each frame. */
+  emitPulseUniform: { value: number };
   /** 0 = dim (leaving), 1 = fully powered (centred). GSAP tweens this → brightness + emissive. */
   litState: { value: number };
   /** 0 = off-stage/invisible, 1 = on the pad. GSAP tweens this → material opacity. */
   presence: { value: number };
-}
-
-interface PreparedVessel {
-  group: THREE.Group;
-  materials: THREE.Material[];
 }
 
 // Soft dark blob → the contact shadow the centred craft casts onto the pad.
@@ -174,68 +189,23 @@ function createStarfield(): THREE.Points {
   return new THREE.Points(geometry, material);
 }
 
-function collectMaterials(root: THREE.Object3D): THREE.Material[] {
-  const materials: THREE.Material[] = [];
-  root.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      const meshMaterials = Array.isArray(child.material) ? child.material : [child.material];
-      for (const material of meshMaterials) {
-        // Transparency is needed for the swap fades; remember the design opacity.
-        material.transparent = true;
-        material.userData.baseOpacity = material.opacity;
-        if (material instanceof THREE.MeshStandardMaterial) {
-          // Let the environment read a little stronger so metal + painted panels show.
-          material.envMapIntensity = ENV_MAP_INTENSITY;
-        }
-        materials.push(material);
-      }
-    }
-  });
-  return materials;
-}
-
-// Patch a hull material so its base colour becomes a two-colour fresnel mix (colorCore where the
-// surface faces the camera → colorEdge at grazing angles) scaled by a brightness the state drives.
-// The brightness lives in a uniform object on userData so applyLitState can animate it (dim when
-// leaving, bright when centred) without recompiling.
-function setupHullTint(
-  material: THREE.MeshStandardMaterial,
-  colorCore: THREE.Color,
-  colorEdge: THREE.Color,
-) {
-  const brightnessUniform = { value: ACTIVE_BRIGHTNESS };
-  material.userData.tintBrightness = brightnessUniform;
-
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uColorCore = { value: colorCore };
-    shader.uniforms.uColorEdge = { value: colorEdge };
-    shader.uniforms.uTintBrightness = brightnessUniform;
-    shader.uniforms.uFresnelPower = { value: FRESNEL_POWER };
-
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        uniform vec3 uColorCore;
-        uniform vec3 uColorEdge;
-        uniform float uTintBrightness;
-        uniform float uFresnelPower;`,
-      )
-      // normal (view space) + vViewPosition are both available after this chunk; diffuseColor was
-      // set earlier in <color_fragment> and is still in scope for the lighting below.
-      .replace(
-        '#include <normal_fragment_begin>',
-        `#include <normal_fragment_begin>
-        float hullFresnel = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), uFresnelPower);
-        diffuseColor.rgb *= mix(uColorCore, uColorEdge, hullFresnel) * uTintBrightness;`,
-      );
-  };
-  material.needsUpdate = true;
-}
-
 // Centre the model, scale so every hull reads at the same size, and rest its base on y = 0 (origin
 // at the base, not the centre) so a craft sits ON the pad when its rig is at y = 0.
-function prepareVessel(loadedScene: THREE.Group): PreparedVessel {
+function prepareVessel(
+  loadedScene: THREE.Group,
+  rotationDegrees?: { x?: number; y?: number; z?: number },
+): THREE.Group {
+  // Apply any per-ship base rotation BEFORE measuring, so the bounding box (and the base-on-ground
+  // placement below) accounts for the new orientation — a flipped hull still sits right on the pad.
+  if (rotationDegrees) {
+    loadedScene.rotation.set(
+      THREE.MathUtils.degToRad(rotationDegrees.x ?? 0),
+      THREE.MathUtils.degToRad(rotationDegrees.y ?? 0),
+      THREE.MathUtils.degToRad(rotationDegrees.z ?? 0),
+    );
+    loadedScene.updateMatrixWorld(true);
+  }
+
   const boundingBox = new THREE.Box3().setFromObject(loadedScene);
   const size   = boundingBox.getSize(new THREE.Vector3());
   const center = boundingBox.getCenter(new THREE.Vector3());
@@ -252,8 +222,7 @@ function prepareVessel(loadedScene: THREE.Group): PreparedVessel {
 
   const group = new THREE.Group();
   group.add(inner);
-
-  return { group, materials: collectMaterials(group) };
+  return group;
 }
 
 export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: DeckOptions) {
@@ -275,12 +244,16 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
     if (!canvas) return;
 
     const reduceMotion = prefersReducedMotion();
+    // The lighter path: coarse pointer (touch) or a narrow viewport. Keeps clearcoat/iridescence +
+    // strong bloom + MSAA off the devices least able to afford them.
+    const lowPower =
+      window.matchMedia('(pointer: coarse)').matches || window.innerWidth < LOW_POWER_MAX_WIDTH;
 
     // ── Renderer ──
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     // Neutral tone mapping holds the hull colours instead of desaturating highlights the way ACES
-    // does — the fleet read flat/grey under ACES.
+    // does — the fleet read flat/grey under ACES. OutputPass applies this after the composer.
     renderer.toneMapping = THREE.NeutralToneMapping;
     renderer.toneMappingExposure = TONE_MAPPING_EXPOSURE;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -295,14 +268,32 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
     const roomEnvironment = new RoomEnvironment();
     scene.environment = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
 
-    // Warm key + neutral fill + a cyan rim that traces the hull's edge.
+    // Warm key + neutral fill + a rim that traces the hull's edge (recoloured per ship below).
     const keyLight = new THREE.DirectionalLight(KEY_LIGHT_COLOR, KEY_LIGHT_INTENSITY);
     keyLight.position.set(4, 7, 5);
     const fillLight = new THREE.DirectionalLight(FILL_LIGHT_COLOR, FILL_LIGHT_INTENSITY);
     fillLight.position.set(-6, -1, 2);
-    const rimLight = new THREE.DirectionalLight(RIM_LIGHT_COLOR, RIM_LIGHT_INTENSITY);
+    const rimLight = new THREE.DirectionalLight(0xffffff, RIM_LIGHT_INTENSITY);
     rimLight.position.set(-3, 3, -6);
     scene.add(keyLight, fillLight, rimLight, new THREE.AmbientLight(0xffffff, AMBIENT_INTENSITY));
+
+    // ── Post-processing: selective bloom ──
+    // A HalfFloat + MSAA target keeps the bloom precise and the edges clean; the bloom threshold
+    // means only the bright accents/highlights bleed, so it reads as glowing engines, not a haze.
+    const composerTarget = new THREE.WebGLRenderTarget(1, 1, {
+      type: THREE.HalfFloatType,
+      samples: lowPower ? 0 : BLOOM_MSAA_SAMPLES,
+    });
+    const composer = new EffectComposer(renderer, composerTarget);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(1, 1),
+      lowPower ? BLOOM_STRENGTH_LOW : BLOOM_STRENGTH,
+      BLOOM_RADIUS,
+      BLOOM_THRESHOLD,
+    );
+    composer.addPass(bloomPass);
+    composer.addPass(new OutputPass());
 
     // ── Starfield ──
     const starfield = createStarfield();
@@ -322,7 +313,7 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
     scene.add(shadow);
 
     // ── Ship rigs (created empty up-front so status works before models arrive) ──
-    const ships: DeckShip[] = DECK_SERVICES.map((service) => {
+    const ships: DeckShip[] = DECK_SERVICES.map(() => {
       const stage = new THREE.Group();
       const lift  = new THREE.Group();
       const spin  = new THREE.Group();
@@ -337,20 +328,20 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
         lift,
         spin,
         materials: [],
-        colorCore: new THREE.Color(service.colorCore),
-        colorEdge: new THREE.Color(service.colorEdge),
+        brightnessUniform: { value: ACTIVE_BRIGHTNESS },
+        emitPulseUniform: { value: 1 },
         litState: { value: 0 },
         presence: { value: 0 },
       };
     });
 
-    // Push a ship's lit value (0..1) onto its hull brightness + internal emissive strength.
+    // Push a ship's lit value (0..1) onto its (shared) hull brightness + native emissive strength.
     const applyLitState = (ship: DeckShip) => {
-      const brightness = THREE.MathUtils.lerp(DORMANT_BRIGHTNESS, ACTIVE_BRIGHTNESS, ship.litState.value);
+      ship.brightnessUniform.value = THREE.MathUtils.lerp(
+        DORMANT_BRIGHTNESS, ACTIVE_BRIGHTNESS, ship.litState.value,
+      );
       ship.materials.forEach((material) => {
         if (material instanceof THREE.MeshStandardMaterial) {
-          const tintBrightness = material.userData.tintBrightness as { value: number } | undefined;
-          if (tintBrightness) tintBrightness.value = brightness;
           material.emissiveIntensity = ship.litState.value * LIT_EMISSIVE_INTENSITY;
         }
       });
@@ -361,6 +352,40 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
       ship.materials.forEach((material) => {
         const baseOpacity = (material.userData.baseOpacity as number | undefined) ?? 1;
         material.opacity = baseOpacity * ship.presence.value;
+      });
+    };
+
+    // Light the active craft to match its vibe: the rim light eases to the ship's rim colour, and the
+    // key light eases to its per-ship colour + intensity (default warm key when the ship omits `light`).
+    // Instant on the first stage / under reduced motion.
+    const applyShipLighting = (index: number, instant = false) => {
+      const service = DECK_SERVICES[index];
+      const rimTarget = new THREE.Color(rimColorOf(service.profile));
+      const keyTarget = new THREE.Color(service.light?.color ?? KEY_LIGHT_COLOR);
+      const fillTarget = new THREE.Color(service.light?.fill ?? FILL_LIGHT_COLOR);
+      const keyIntensity = service.light?.intensity ?? KEY_LIGHT_INTENSITY;
+      if (instant || reduceMotion) {
+        rimLight.color.copy(rimTarget);
+        keyLight.color.copy(keyTarget);
+        keyLight.intensity = keyIntensity;
+        fillLight.color.copy(fillTarget);
+        return;
+      }
+      gsap.to(rimLight.color, {
+        r: rimTarget.r, g: rimTarget.g, b: rimTarget.b,
+        duration: RIM_LIGHT_TWEEN, ease: 'power2.out', overwrite: true,
+      });
+      gsap.to(keyLight.color, {
+        r: keyTarget.r, g: keyTarget.g, b: keyTarget.b,
+        duration: RIM_LIGHT_TWEEN, ease: 'power2.out', overwrite: true,
+      });
+      gsap.to(keyLight, {
+        intensity: keyIntensity,
+        duration: RIM_LIGHT_TWEEN, ease: 'power2.out', overwrite: true,
+      });
+      gsap.to(fillLight.color, {
+        r: fillTarget.r, g: fillTarget.g, b: fillTarget.b,
+        duration: RIM_LIGHT_TWEEN, ease: 'power2.out', overwrite: true,
       });
     };
 
@@ -379,6 +404,7 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
     // Which craft is currently staged. Initialised to the mount index so the first selection
     // effect (same index) is a no-op rather than a phantom swap.
     let stagedIndex = activeIndexRef.current;
+    applyShipLighting(stagedIndex, true);
 
     // Warp a craft onto the pad: snap it off-stage (banked + shrunk, hidden) then ease it to centre.
     // `delay` lets the swap hold it off until the outgoing craft has cleared.
@@ -456,6 +482,7 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
       const direction = nextIndex > stagedIndex ? 1 : -1;
       const previousIndex = stagedIndex;
       stagedIndex = nextIndex;
+      applyShipLighting(nextIndex);
 
       ships.forEach((ship, index) => {
         const isCenter  = index === nextIndex;
@@ -479,6 +506,7 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
     const replayEntrance = () => {
       const index = activeIndexRef.current;
       stagedIndex = index;
+      applyShipLighting(index);
       ships.forEach((ship, shipIndex) => {
         if (shipIndex !== index) {
           parkShip(ship, SWAP_OFFSET_X);
@@ -512,7 +540,6 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
                 material.color.set(PAD_COLOR);
                 material.emissive.set(PAD_EMISSIVE_COLOR);
                 material.emissiveIntensity = PAD_EMISSIVE_INTENSITY;
-                material.envMapIntensity = ENV_MAP_INTENSITY;
               }
             });
           }
@@ -549,16 +576,16 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
       gltfLoader.load(
         service.modelPath,
         (gltf) => {
-          const prepared = prepareVessel(gltf.scene);
+          const vessel = prepareVessel(gltf.scene, service.modelRotation);
           const ship = ships[index];
-          ship.spin.add(prepared.group);
-          ship.materials = prepared.materials;
-          // Give every hull material its two-colour mix, then reflect its current staged state.
-          ship.materials.forEach((material) => {
-            if (material instanceof THREE.MeshStandardMaterial) {
-              setupHullTint(material, ship.colorCore, ship.colorEdge);
-            }
-          });
+          ship.spin.add(vessel);
+          // Re-skin every hull material onto this ship's graded palette + accent glow.
+          ship.materials = applyHullMaterials(
+            vessel,
+            service.profile,
+            { brightness: ship.brightnessUniform, emitPulse: ship.emitPulseUniform },
+            lowPower,
+          );
 
           // The centred craft shows immediately; the rest wait off-stage. (Materials only exist
           // now, so the initial pose has to be applied after the model arrives.)
@@ -655,19 +682,28 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
     const renderFrame = () => {
       frameId = requestAnimationFrame(renderFrame);
 
-      const elapsed = clock.getElapsedTime();
+      // getDelta() advances the clock and updates elapsedTime, so read elapsedTime directly after
+      // (calling getElapsedTime() too would double-advance the delta).
+      const deltaSeconds = clock.getDelta();
+      const elapsed = clock.elapsedTime;
       starfield.rotation.y = elapsed * STAR_DRIFT;
 
-      if (!reduceMotion) {
-        const centred = activeIndexRef.current;
-        ships.forEach((ship, index) => {
-          // Only the centred craft gets the gentle float bob; the rest rest flat.
-          const floatOffset = index === centred ? Math.sin(elapsed * FLOAT_SPEED) * FLOAT_AMPLITUDE : 0;
-          ship.lift.position.y = SHIP_HOVER + floatOffset;
-        });
-      }
+      const centred = activeIndexRef.current;
+      ships.forEach((ship, index) => {
+        const isCentred = index === centred;
+        // Only the centred craft animates; the rest rest flat off-stage.
+        const animateCentred = isCentred && !reduceMotion;
+        // 1. Float / hover bob — drifts up and down.
+        ship.lift.position.y = SHIP_HOVER + (animateCentred ? Math.sin(elapsed * FLOAT_SPEED) * FLOAT_AMPLITUDE : 0);
+        // 2. Slow turntable spin — paused while dragging so manual rotation stays precise.
+        if (animateCentred && !drag.active) ship.lift.rotation.y += AUTO_ROTATE_SPEED * deltaSeconds;
+        // 3. Engine-glow breathing.
+        ship.emitPulseUniform.value = animateCentred
+          ? 1 + Math.sin(elapsed * EMIT_PULSE_SPEED) * EMIT_PULSE_AMPLITUDE
+          : 1;
+      });
 
-      renderer.render(scene, camera);
+      composer.render();
     };
     renderFrame();
 
@@ -679,14 +715,59 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
+      composer.setSize(width, height);
     };
     handleResize();
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(canvas.parentElement ?? canvas);
 
+    // ── Dev tuning panel (off by default; opened with ?tune) ──
+    // Lets us dial the centred ship's palette + the bloom by eye, then bake the values into
+    // deckServices.ts. Dynamically imported so lil-gui never enters the normal bundle.
+    let destroyGui: (() => void) | undefined;
+    if (new URLSearchParams(window.location.search).has('tune')) {
+      import('lil-gui')
+        .then(({ default: GUI }) => {
+          const gui = new GUI({ title: 'Fleet tuning · active ship' });
+          const bloomFolder = gui.addFolder('Bloom');
+          bloomFolder.add(bloomPass, 'strength', 0, 3, 0.01);
+          bloomFolder.add(bloomPass, 'radius', 0, 2, 0.01);
+          bloomFolder.add(bloomPass, 'threshold', 0, 1, 0.01);
+
+          // Write a value across every hull material of the currently-centred ship.
+          const eachActiveUniform = (mutate: (uniforms: HullShaderUniforms) => void) => {
+            activeShip()?.materials.forEach((material) => {
+              const uniforms = material.userData.hullUniforms as HullShaderUniforms | undefined;
+              if (uniforms) mutate(uniforms);
+            });
+          };
+          const palette = {
+            shadow: '#000000', hull: '#000000', highlight: '#000000', accent: '#000000', rim: '#000000',
+            gradeMid: 0.5, emitThreshold: 0.8, emitStrength: 2.4,
+            metalness: 0.35, roughness: 0.55, clearcoat: 0.15, envMapIntensity: 0.7,
+          };
+          const colorFolder = gui.addFolder('Palette');
+          colorFolder.addColor(palette, 'shadow').onChange((value: string) => eachActiveUniform((u) => u.uHullShadow.value.set(value)));
+          colorFolder.addColor(palette, 'hull').onChange((value: string) => eachActiveUniform((u) => u.uHullMid.value.set(value)));
+          colorFolder.addColor(palette, 'highlight').onChange((value: string) => eachActiveUniform((u) => u.uHullHighlight.value.set(value)));
+          colorFolder.addColor(palette, 'accent').onChange((value: string) => eachActiveUniform((u) => u.uAccent.value.set(value)));
+          colorFolder.addColor(palette, 'rim').onChange((value: string) => eachActiveUniform((u) => u.uRim.value.set(value)));
+          colorFolder.add(palette, 'gradeMid', 0, 1, 0.01).onChange((value: number) => eachActiveUniform((u) => { u.uGradeMid.value = value; }));
+          colorFolder.add(palette, 'emitThreshold', 0, 1, 0.01).onChange((value: number) => eachActiveUniform((u) => { u.uEmitThreshold.value = value; }));
+          colorFolder.add(palette, 'emitStrength', 0, 6, 0.05).onChange((value: number) => eachActiveUniform((u) => { u.uEmitStrength.value = value; }));
+          colorFolder.add(palette, 'metalness', 0, 1, 0.01).onChange((value: number) => activeShip()?.materials.forEach((material) => { (material as THREE.MeshStandardMaterial).metalness = value; }));
+          colorFolder.add(palette, 'roughness', 0, 1, 0.01).onChange((value: number) => activeShip()?.materials.forEach((material) => { (material as THREE.MeshStandardMaterial).roughness = value; }));
+          colorFolder.add(palette, 'clearcoat', 0, 1, 0.01).onChange((value: number) => activeShip()?.materials.forEach((material) => { if (material instanceof THREE.MeshPhysicalMaterial) material.clearcoat = value; }));
+          colorFolder.add(palette, 'envMapIntensity', 0, 2, 0.01).onChange((value: number) => activeShip()?.materials.forEach((material) => { (material as THREE.MeshStandardMaterial).envMapIntensity = value; }));
+          destroyGui = () => gui.destroy();
+        })
+        .catch(() => {});
+    }
+
     return () => {
       cancelAnimationFrame(frameId);
       resizeObserver.disconnect();
+      destroyGui?.();
       canvas.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
@@ -707,6 +788,10 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
           }
         });
       });
+      gsap.killTweensOf(rimLight.color);
+      gsap.killTweensOf(keyLight.color);
+      gsap.killTweensOf(keyLight);
+      gsap.killTweensOf(fillLight.color);
       padGroup?.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.geometry.dispose();
@@ -722,6 +807,10 @@ export function useServicesDeck({ canvasRef, activeIndex, onFlick, onStatus }: D
       (starfield.material as THREE.Material).dispose();
       pmremGenerator.dispose();
       scene.environment?.dispose();
+      // EffectComposer.dispose() only frees its own targets + copy pass, not added passes —
+      // so free the bloom pass's render-target pyramid explicitly to avoid a GPU leak on unmount.
+      bloomPass.dispose();
+      composer.dispose();
       renderer.dispose();
     };
     // Setup runs once; selection changes are read live via activeIndexRef.

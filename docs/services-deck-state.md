@@ -27,31 +27,84 @@ page continues. You can also **drag the craft** to rotate it (it springs back on
 > Retired in the refactor: `useDeckReveal.ts` and `useDeckSnap.ts` (the old `-100vh` overlap +
 > guard-reveal + snap-assist) — replaced by the clean pinned section in `useDeckCarousel.ts`.
 
-## Ship colors  ← edit these in `deckServices.ts`
+## Ship identities — graded palettes  ← edit `profile` in `deckServices.ts`
 
-Each hull is a **two-color fresnel mix**: `colorCore` where the hull faces the camera,
-`colorEdge` at grazing/edge angles. The centred craft sits **bright**; a craft leaving the pad
-dims back as it fades. Hex strings.
+Each hull is **re-graded onto its own palette** instead of washed to one flat hue. The model's own
+albedo *luminance* drives a three-tone map (`shadow` → `hull` → `highlight`), so panels, recesses,
+and bright faces stay distinct — the ship reads as a real, multi-material machine, never one solid
+colour. On top of that the brightest texels (engines/windows) are picked out as an `accent` glow
+that feeds the bloom pass, and the silhouette catches a thin fresnel `rim`. The model's
+normal/roughness/metalness maps are left untouched, so the PBR realism survives the recolour. This
+all lives in `hullMaterial.ts` (`applyHullMaterials` → `createHullMaterial` → `applyGradedHull`).
 
-| # | Service | `colorCore` (faces camera) | `colorEdge` (edges) | Model |
-|---|---|---|---|---|
-| 01 | Web Experiences | `#2f6ad0` (blue) | `#22ecff` (cyan) | `spaceship.glb` |
-| 02 | Mobile Systems | `#1aa79c` (teal) | `#6cf2d0` (mint) | `spaceship3.glb` |
-| 03 | Enterprise Platforms | `#4a6a9a` (steel) | `#9fe6ff` (light cyan) | `cargo_spaceship.glb` |
-| 04 | Artificial Intelligence | `#7a4ad0` (purple) | `#36e6ff` (cyan) | `star_aventure_spaceship_starship_fighter.glb` |
+Each `profile` is fully independent (no shared values). Fields: `shadow / hull / highlight / accent
+/ rim` (hex), `metalness / roughness / clearcoat / clearcoatRoughness`, `iridescence (+ IOR)`,
+`gradeMid` (shadow→highlight pivot), `emitThreshold / emitStrength` (the glow pickout), `envIntensity`.
 
-> The carousel shows one craft at a time, so every bay gets a **distinct** hull (AI was moved off
-> the duplicate `spaceship3.glb`). The mix multiplies the model's own texture (detail stays; hue shifts).
+| # | Service | identity | hull | accent (glows) | finish | Model |
+|---|---|---|---|---|---|---|
+| 01 | Web Experiences | Ember Noir | full black `#060606` | faint red rim `#4a0f13` | matte; near-neutral light | `spaceship.glb` |
+| 02 | Mobile Systems | Deep Navy | navy `#14233f` | cool white `#cfe0f5` | matte; reddish key light | `spaceship3.glb` |
+| 03 | Enterprise Platforms | Gunmetal | gunmetal `#3a4856` | **warm amber `#ffb24d`** | brushed metal | `cargo_spaceship.glb` |
+| 04 | Artificial Intelligence | Legacy (original) | purple `#7a4ad0` | — (no accent glow) | flat two-tone tint | `star_aventure_spaceship_starship_fighter.glb` |
+
+> Ships 01–03 use the **graded** treatment. **Ship 04 is the original pre-overhaul look** — a flat
+> two-tone tint (`LegacyProfile`: `colorCore` purple `#7a4ad0` → `colorEdge` cyan `#36e6ff`, native
+> metalness/roughness, no graded palette/clearcoat/iridescence), kept on request. The treatment is
+> chosen per ship by `profile.kind` (`'graded'` default / `'legacy'`); see `hullMaterial.ts`.
+>
+> The graded ships are deliberately **low-gloss** (matte/painted metal: low `metalness`, higher
+> `roughness`, light `clearcoat`, reduced `envIntensity` ≈0.4–0.7 so the studio env doesn't read as
+> mirror reflections; ships 01 + 02 are the least reflective at `envIntensity` 0.4 / `metalness` 0.25).
+> Upgrade to `MeshPhysicalMaterial` is skipped on the low-power path; the grade
+> still applies. The `?tune` panel exposes `metalness / roughness / clearcoat / envMapIntensity` for
+> live tuning (graded ships; legacy ship 04 only responds to metalness/roughness).
+
+> **Dial it in live:** open the deck with `?tune` for a `lil-gui` panel exposing the centred ship's
+> palette/PBR + the bloom (strength/radius/threshold). Tune by eye, then bake the values back into
+> `deckServices.ts` / the constants. The panel never loads without the flag.
 
 ## Tuning knobs
 
-### Hull color / brightness — `useServicesDeck.ts` (`── Powered-on look ──`)
+### Hull brightness / glow — `useServicesDeck.ts` (`── Powered-on look ──` / `── Engine glow pulse ──`)
 | Constant | Value | Effect |
 |---|---|---|
-| `DORMANT_BRIGHTNESS` | `0.5` | brightness of a craft as it **leaves** the pad |
-| `ACTIVE_BRIGHTNESS` | `1.2` | brightness of the **centred** craft |
-| `FRESNEL_POWER` | `2.2` | ↑ edge color hugs the silhouette; ↓ spreads it across the hull |
-| `LIT_EMISSIVE_INTENSITY` | `1.3` | the craft's **internal** lights when centred |
+| `DORMANT_BRIGHTNESS` | `0.4` | hull brightness as a craft **leaves** the pad |
+| `ACTIVE_BRIGHTNESS` | `1.0` | hull brightness on the **centred** craft |
+| `LIT_EMISSIVE_INTENSITY` | `1.3` | any **native** emissive map's intensity when centred |
+| `EMIT_PULSE_AMPLITUDE` / `_SPEED` | `0.22` / `1.6` | engine-glow breathing on the centred craft |
+
+> The old `FRESNEL_POWER` is gone; the rim now lives in `hullMaterial.ts` as `RIM_POWER` / `RIM_STRENGTH`,
+> in the per-ship `rim` colour.
+
+### Bloom + per-ship rim light — `useServicesDeck.ts`
+`BLOOM_STRENGTH` `0.85` (`_LOW` `0.5` on weak devices) · `BLOOM_RADIUS` `0.5` · `BLOOM_THRESHOLD` `0.7`
+(only the bright accents/highlights bleed) · `BLOOM_MSAA_SAMPLES` `4` (composer-target MSAA, since
+`antialias:true` is ignored once a composer renders). Pipeline: `RenderPass → UnrealBloomPass →
+OutputPass`.
+
+**Per-ship lighting** (`applyShipLighting`, `RIM_LIGHT_TWEEN` `0.5`s): on each swap the **rim light**
+eases to the ship's `rim` colour, and the **key light** eases to the ship's optional `light`
+override (`{ color, intensity? }` in `deckServices.ts`) — so each craft feels lit for itself. Ships
+that omit `light` keep the default warm key (`KEY_LIGHT_COLOR` / `KEY_LIGHT_INTENSITY`). Current
+overrides: **01 Ember Noir** → near-neutral warm key `#c9c2bc` + neutral fill `#4a4644` (so the black
+hull reads black, not red-washed); **02 Deep Navy** → reddish `#ff5e47` (warm/cool contrast
+against the navy hull). **03 / 04** omit it (unchanged warm key). A `light.fill` override (per-ship
+fill colour) and a `modelRotation` (per-ship base rotation, in degrees) are also available — ship 04
+uses `modelRotation: { x: -180 }` to flip its mis-oriented hull.
+
+### Low-power path — `useServicesDeck.ts`
+`LOW_POWER_MAX_WIDTH` `760`. Coarse pointer **or** viewport narrower than this → keep
+`MeshStandardMaterial` (skip clearcoat/iridescence), softer bloom, no MSAA. The grade/accent/rim
+still apply, so the look stays consistent — just cheaper. Reduced motion additionally drops the
+idle animation (float bob + turntable spin + engine pulse).
+
+### Idle animation (centred craft) — `useServicesDeck.ts`
+The centred craft continuously **floats** up/down (`FLOAT_AMPLITUDE` `0.1` · `FLOAT_SPEED` `1.1`),
+**spins** slowly like a turntable (`AUTO_ROTATE_SPEED` `0.35` rad/s on `lift.rotation.y`, paused
+while dragging so manual rotate stays precise), and its engines **breathe**
+(`EMIT_PULSE_AMPLITUDE` / `_SPEED`). Parked/off-stage craft don't animate. All of it is gated behind
+reduced motion.
 
 ### Landing pad + stars — `useServicesDeck.ts`
 `PAD_TARGET_WIDTH` `5.0` (pad footprint) · `PAD_Y_OFFSET` `0.6` (raise pad so its platform comes up
@@ -83,9 +136,10 @@ nearest craft) · `REVEAL_FALLBACK_MS` `7000`. Trigger creation is gated behind 
 (globals.css) so its pin begins where the hero's pin ends — no empty black scroll between them.
 
 ### Framing / lighting — `useServicesDeck.ts`
-`CAMERA_*` (FOV `34`, distance `8.2`, height `1.7`, look-Y `0.75`) · `TARGET_SIZE` `1.7` (hull
-scale) · `BASE_YAW` `-0.6` (resting 3/4 view) · `KEY_LIGHT_*` (warm `#fff2e2`, `2.6`) ·
-`FILL/RIM/AMBIENT` · `ENV_MAP_INTENSITY` `1.2` · `TONE_MAPPING_EXPOSURE` `1.18` (**Neutral** tone mapping).
+`CAMERA_*` (FOV `34`, distance `8.2`, height `1.7`, look-Y `0.75`) · `TARGET_SIZE` `2.3` (hull
+scale) · `BASE_YAW` `-0.6` (resting 3/4 view) · `KEY_LIGHT_*` (warm `#fff2e2`, `2.4`) ·
+`FILL` / `RIM` (`0.8`, recoloured per ship) / `AMBIENT` · `TONE_MAPPING_EXPOSURE` `1.18`
+(**Neutral** tone mapping). Environment reflection strength is now **per ship** (`profile.envIntensity`).
 
 ### Sun (hero) — `lib/hooks/useHeroAnimation.ts`
 `SUN_SCROLL_SCALE` `1.1` (size) · `SUN_SCROLL_RISE` `200` (px raised above the square center).

@@ -11,16 +11,15 @@ const CAMERA_Z       = 3;
 const ROTATION_SPEED = 0.0018;
 
 // ── Services-only energy ──────────────────────────────────────────────
-// In the services section the sun swells and renders at high resolution (so it stays crisp at
-// the big size), and its spin follows a rhythm: calm for SUN_IDLE_SECONDS, then a quick fast
-// spin for SUN_SPIN_SECONDS, repeating. `intensity` ramps 0→1 on DECK_REVEAL_EVENT and back on
-// DECK_HIDE_EVENT; everywhere else the sun stays calm and low-res.
+// In the services section the sun keeps its normal size, but its spin follows a rhythm: calm for
+// SUN_IDLE_SECONDS, then a quick fast spin for SUN_SPIN_SECONDS, repeating. `intensity` ramps
+// 0→1 on DECK_REVEAL_EVENT and back on DECK_HIDE_EVENT; everywhere else the sun stays calm.
 const INTENSITY_LERP        = 0.05; // how fast it eases into / out of the energised state
 const SUN_IDLE_SECONDS      = 10;   // calm stretch before each fast spin
 const SUN_SPIN_SECONDS      = 2;    // length of the fast spin
 const SUN_SPIN_SPEEDUP      = 9;    // how much faster it spins/churns during the spin window
 const SUN_SPIN_RAMP_SECONDS = 0.35; // ease in/out of the spin so it isn't a hard switch
-const SERVICES_RENDER_SCALE = 3.5;  // backing-resolution multiplier in services (keep ≥ HeroSun's SERVICES_SUN_SCALE so the enlarged sun stays sharp)
+const SERVICES_RENDER_SCALE = 1;    // backing-resolution multiplier in services (raise only if the sun is swelled again — at normal size 1 is enough)
 const MAX_FRAME_SECONDS     = 0.05; // clamp dt so a tab-restore doesn't fling the surface
 
 // Procedural plasma-star surface (see sunShaders.ts). A hot star is genuinely

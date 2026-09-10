@@ -5,6 +5,7 @@ import PageShell from '@/components/layout/PageShell/PageShell';
 import DocSection from '@/components/layout/PageShell/DocSection';
 import EnquiryButton from '@/components/ui/EnquiryButton/EnquiryButton';
 import EnquiryPanel from '@/components/ui/EnquiryPanel/EnquiryPanel';
+import ProjectLink from '@/components/ui/ProjectLink/ProjectLink';
 import { useSiteContent, useSiteSections } from '@/lib/cms/SiteContentProvider';
 import { buildEnquiryPrefill, type EnquiryPrefill } from '@/lib/enquirySubjects';
 import {
@@ -228,6 +229,12 @@ export default function LitePage() {
                       </li>
                     ))}
                   </ul>
+                  {/* ⚠ The one place on this site where the project link is more than a courtesy.
+                      `/lite` exists to be the crawlable render of a page whose real markup is a
+                      WebGL scene, and an outbound `<a href>` to the actual work is exactly the kind
+                      of thing that page has none of. Renders nothing when there is no URL, which is
+                      most projects. */}
+                  <ProjectLink url={project.liveUrl} className="doc-link" />
                   {/* ⚠ `reference` is what makes this different from the service's above: the brief
                       LEADS with the project rather than replacing the discipline's seed — "this kind
                       of work, in the orbit of that one". Exactly what the field's CTA carries. */}

@@ -4168,6 +4168,104 @@ body {
   color: rgba(235, 232, 224, 0.6);
 }
 
+/* ── The link out to the project itself ──
+   Present only when the panel has an address for this project, which is the minority of them — so
+   this rule has to look correct as the LAST thing in the block and equally correct absent, with the
+   CTA closing straight up under the tags. That is why the separation is a top border on the link
+   rather than a bottom margin on the tag row: nothing above it knows whether it exists.
+
+   Deliberately NOT a button. It sits one step down from "Start one like this", which is what this
+   section is actually asking for — the link is the evidence under the claim, and evidence that
+   shouts competes with the ask. A hairline and a domain is the whole treatment.
+
+   ⚠ `flex`, not `inline-flex`, and `align-self: start` — as a direct child of `.works-detail` this
+   is one of the "lines" GSAP shears on every project change, and an inline box's transform origin
+   moves with its own text width, so a short domain and a long one would leave at visibly different
+   rates from the block they belong to. */
+.works-detail-link {
+  display: flex;
+  align-self: start;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  margin-top: 1.125rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-tiny);
+  letter-spacing: 0.06em;
+  color: rgba(235, 232, 224, 0.62);
+  text-decoration: none;
+  pointer-events: auto;
+  transition: color 0.35s ease;
+}
+
+/* The underline is on the host span rather than the anchor so it tracks the TEXT and leaves the
+   glyph alone — an underline running under an arrow reads as a strikethrough through it. Drawn as a
+   background rather than `text-decoration` because only a gradient can be animated from zero width;
+   a decoration can only appear all at once. */
+.works-detail-link-host {
+  background-image: linear-gradient(var(--works-accent), var(--works-accent));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0 1px;
+  transition: background-size 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.works-detail-link-glyph {
+  flex: none;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.works-detail-link:hover,
+.works-detail-link:focus-visible {
+  color: var(--works-accent);
+}
+
+.works-detail-link:hover .works-detail-link-host,
+.works-detail-link:focus-visible .works-detail-link-host {
+  background-size: 100% 1px;
+}
+
+/* The arrow leaves along its own diagonal — the direction it points, which is the direction the
+   click goes. A generic nudge right would say nothing the glyph doesn't already say. */
+.works-detail-link:hover .works-detail-link-glyph,
+.works-detail-link:focus-visible .works-detail-link-glyph {
+  transform: translate(0.15rem, -0.15rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The colour change carries the whole affordance on its own; the underline and the arrow just
+     arrive rather than travelling. */
+  .works-detail-link-host,
+  .works-detail-link-glyph {
+    transition: none;
+  }
+
+  .works-detail-link:hover .works-detail-link-glyph,
+  .works-detail-link:focus-visible .works-detail-link-glyph {
+    transform: none;
+  }
+}
+
+/* ── The two surfaces that borrow the treatment but not the hairline ──
+   The rule's own border is there to separate it from the tag row ABOVE it in a block that has no
+   other divisions. Neither of these needs that: the drawer is a sheet with its own edges, and a
+   `/lite` claim already sits in a list where every entry is ruled off from the next. Both keep the
+   space and drop the line. */
+.drawer-link,
+.doc-link {
+  margin-top: 1.1rem;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* The document sets type a step larger than the overlay does — `--fs-tiny` is sized against a HUD
+   read at a glance, and this page is read the way a page is read. */
+.doc-link {
+  font-size: var(--fs-small);
+  margin-bottom: 0.25rem;
+}
+
 /* Arrow nav — two arrows step the focus; a counter sits between them. The overlay's only
    interactive zone (drag-to-look is handled by the canvas beneath). */
 .works-nav {
@@ -4290,10 +4388,17 @@ body {
     padding: 0.25rem 0.65rem 0.25rem 0.5rem;
   }
 
-  /* Both live in the drawer at this width. Hidden rather than unmounted so the shear transition and
-     the arrival stagger keep a stable set of children at every width. */
+  /* All three live in the drawer at this width. Hidden rather than unmounted so the shear transition
+     and the arrival stagger keep a stable set of children at every width.
+
+     ⚠ The link is matched as a CHILD OF `.works-detail`, not by its class alone. The drawer's copy
+     of it carries the same class — it has to, that is where the styling lives — but the drawer
+     PORTALS TO `body`, so a bare `.works-detail-link` here would reach inside the sheet and hide the
+     very link this rule is moving into it. The one width where the link is meant to be visible would
+     be the one width it disappeared at. */
   .works-detail-copy,
-  .works-detail-tags {
+  .works-detail-tags,
+  .works-detail > .works-detail-link {
     display: none;
   }
 

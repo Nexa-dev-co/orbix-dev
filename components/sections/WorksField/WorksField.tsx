@@ -11,6 +11,7 @@ import { buildEnquiryPrefill } from '@/lib/enquirySubjects';
 import Drawer from '@/components/ui/Drawer/Drawer';
 import EnquiryButton from '@/components/ui/EnquiryButton/EnquiryButton';
 import EnquiryPanel from '@/components/ui/EnquiryPanel/EnquiryPanel';
+import ProjectLink from '@/components/ui/ProjectLink/ProjectLink';
 
 // What comes to rest when a covered nav jump lands here: both head blocks line by line, then the
 // arrows. The mark itself needs nothing — the glide settled it on the way in.
@@ -157,6 +158,19 @@ export default function WorksField({ activeIndex, goTo }: WorksFieldProps) {
               ))}
             </ul>
 
+            {/* The link out to the work itself — the domain, not a label, because this is the one
+                line of the block nobody at this studio wrote and that is exactly what makes it
+                evidence rather than a claim. See lib/displayHostname.ts.
+
+                ⚠ Rendered only when there IS one, and most projects will not have one. That varies
+                the child count of `.works-detail`, which is safe here and worth saying once: both
+                `useWorksTextTransition` and `useSectionArrival` re-read `block.children` on every
+                run, and the entrance is a `fromTo` with explicit from-values — so a link appearing
+                on project 02 and gone again on 03 animates correctly in both directions. It is only
+                the WIDTH case that has to hide rather than unmount (see the CSS), because that one
+                would change the node set underneath a tween already in flight. */}
+            <ProjectLink url={activeProject.liveUrl} />
+
             {/* The actions, in the same wrapper and the same order the fleet uses — a visitor meets
                 this pairing twice and it should be one control, not two similar ones. ⚠ "Details" USED
                 TO LIVE IN THE NAV, under the counter; it moved here so both sections put their actions
@@ -235,6 +249,11 @@ export default function WorksField({ activeIndex, goTo }: WorksFieldProps) {
               <li key={tag} className="drawer-tag">{tag}</li>
             ))}
           </ul>
+
+          {/* The link follows the paragraph and the tags in here rather than staying on the frame:
+              a phone keeps only what NAMES the project, and a domain does not name it. Copy that
+              doesn't fit goes in the drawer, not in the bin. */}
+          <ProjectLink url={activeProject.liveUrl} className="drawer-link" />
         </Drawer>
       )}
 

@@ -18,6 +18,13 @@
 // projects arbitrarily, plus one project that has none and therefore grows an "H". A letter mark is
 // extruded in helvetiker rather than Syne — `markBody.ts` documents why that cannot be fixed
 // without new tooling.
+//
+// ⚠ AND NOT ONE OF THEM CARRIES A `liveUrl`, WHICH IS DELIBERATE — DO NOT INVENT ONE. Aphelion,
+// Meridian, Cinder and Halcyon are made up, so any domain written here would either 404 or, far
+// worse, send visitors to a real site belonging to a stranger who happens to own that name. The
+// cost is that an unconfigured clone never shows the link at all, and that is the right trade: the
+// feature is visible the moment the panel publishes a project with one, which is where every real
+// project comes from anyway.
 
 import { isDisciplineId, type DisciplineId } from '@/lib/enquirySubjects';
 import type { PublishedProject } from '@/lib/cms/publishedContent';
@@ -43,6 +50,18 @@ export interface WorksProject {
   description: string;
   /** Capability / tech chips under the description. */
   tags: string[];
+  /**
+   * Where the finished thing lives — rendered under the tags as its bare domain, or not rendered.
+   *
+   * ⚠ Optional, and MOST projects will not have one. Behind a client's login, under an NDA, or
+   * simply taken down: a project with no link is the ordinary case rather than one waiting to be
+   * completed, which is why the section draws no element instead of an empty or disabled state.
+   *
+   * ⚠ Nothing to do with `markSvg` below, despite both arriving from the panel as URLs. That one is
+   * dereferenced on the server precisely so its address stays out of the HTML; this one exists to
+   * BE an address in the HTML. See `lib/cms/publishedContent.ts` for the full distinction.
+   */
+  liveUrl?: string | null;
   /**
    * The project's mark, as SVG source.
    *
@@ -202,6 +221,11 @@ export function resolveWorksProjects(
     discipline: isDisciplineId(publishedProject.discipline)
       ? publishedProject.discipline
       : FALLBACK_DISCIPLINE,
+    // ⚠ `|| null`, not `?? null` — an older release predating this field arrives `undefined`, but an
+    // editor who cleared the box in a panel that still wrote empty strings arrives `""`, and `""`
+    // survives `??` all the way to an `<a href="">` that silently reloads the page. One falsy test
+    // covers both, and the field is a URL, so there is no legitimate falsy value to protect.
+    liveUrl: publishedProject.liveUrl || null,
     // `?? null` rather than leaving it undefined: a shorter `markSources` than `published` is a
     // caller bug, and every project reading "no mark, grow the initial" is the safe way to be wrong.
     markSvg: markSources[position] ?? null,

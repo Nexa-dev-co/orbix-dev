@@ -117,6 +117,18 @@ export interface PublishedProject {
   tags: string[];
   discipline: string;
   /**
+   * Where the finished thing lives, or null.
+   *
+   * ⚠ Read the field below before assuming these two are handled alike. `markSvgUrl` is published
+   * but must never reach a browser; this one is an editor-supplied address on somebody else's
+   * domain and reaching the browser as a real `<a href>` is the entire point of it. Nothing about
+   * `markSource.ts` applies here — there is no dereferencing step and there must not be one.
+   *
+   * Null is the ordinary case rather than a gap: most work is behind a client's login or under an
+   * NDA. The section renders no element at all in that case, so there is no empty state to design.
+   */
+  liveUrl: string | null;
+  /**
    * The project's uploaded mark, as a public storage URL — or null, which is a real state rather
    * than a missing one: the field grows the project's INITIAL instead.
    *

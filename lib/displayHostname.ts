@@ -9,10 +9,14 @@
  * this studio wrote. "Visit site" is a button. `aphelion.com` is a receipt.
  *
  * ── ⚠ It never returns an empty string ───────────────────────────────────────────────────────────
- * The panel validates `http(s)` on save, so a well-formed URL is the expected input — but this
- * function is also reached by whatever an unconfigured fallback or a hand-edited release happens to
- * carry, and a link whose visible text is "" is a 0px hit target that reads as a rendering bug. So
- * every branch ends at something printable, falling back to the trimmed input itself.
+ * A link whose visible text is "" is a 0px hit target that reads as a rendering bug, so every branch
+ * ends at something printable, falling back to the trimmed input itself.
+ *
+ * Its one caller (`ProjectLink`) now refuses anything that is not `http(s)` BEFORE reaching this, so
+ * in practice the parse always succeeds. The unparseable branch is kept anyway: this is a display
+ * helper and the day something calls it without that guard, a printable label is a far better
+ * failure than a blank one. ⚠ It is NOT a security check and must never be mistaken for one —
+ * `lib/isSafeExternalUrl.ts` is what decides whether a URL may be rendered at all.
  */
 
 /** Prefixes worth hiding: they are noise in a label, and every reader supplies them mentally. */

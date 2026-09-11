@@ -101,6 +101,8 @@ export interface AccretionChunks {
   /** Outline sites the crystal layer grows from — see `accretionCrystals`. */
   rimPoints: THREE.Vector2[];
   rimNormals: THREE.Vector2[];
+  /** How thin the strokes of this mark are relative to a square logo, used to scale depth and crystals. */
+  thicknessScale: number;
 }
 
 /** mulberry32 — deterministic, so a mark always cuts into the same stones. */
@@ -184,6 +186,7 @@ export function buildAccretionChunks(
     triangleCount: 0,
     rimPoints: [],
     rimNormals: [],
+    thicknessScale: 1.0,
   };
   if (capMesh.points.length === 0 || capMesh.triangles.length === 0) return empty;
 
@@ -215,10 +218,16 @@ export function buildAccretionChunks(
   const rawCentre = new THREE.Vector2();
   bounds.getCenter(rawCentre);
 
+  // How thick the strokes of this logo are relative to a square logo.
+  // A wide wordmark (like 4:1) will have a much smaller height than a square logo of the same area.
+  // We use this to scale down the Z-depth and crystal lengths so they don't overpower thin letters.
+  const smallestScaled = Math.min(size.x, size.y) * normaliseScale;
+  const thicknessScale = Math.min(1.0, smallestScaled / options.targetSize);
+
   const points = capMesh.points.map((point) =>
     point.clone().sub(rawCentre).multiplyScalar(normaliseScale),
   );
-  const halfDepth = options.depth / 2;
+  const halfDepth = (options.depth * thicknessScale) / 2;
 
   // ── 2 · Distance from every point to the outline ──
   // Drives the size hierarchy, the silhouette protection, and where the crystal grows.
@@ -797,5 +806,6 @@ export function buildAccretionChunks(
     triangleCount: indices.length / 3,
     rimPoints,
     rimNormals,
+    thicknessScale,
   };
 }

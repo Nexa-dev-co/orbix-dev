@@ -191,12 +191,27 @@ export function buildAccretionChunks(
   // Only X and Y come from the outline; `depth` is authored in world units and must never be dragged
   // through the source-to-world scale, or an SVG viewBox and a font glyph give the same slider two
   // different thicknesses.
+  //
+  // ⚠ EQUAL-AREA, not equal-largest-dimension. The old formula fit the largest dimension to
+  // `targetSize`, which gave a 4:1 wordmark a quarter of the screen area a square initial got. This
+  // one scales so that `width × height` after normalisation equals `targetSize²`, then clamps so no
+  // single axis exceeds `MAX_AXIS_FACTOR × targetSize` — a panoramic strip should grow, not overflow
+  // the frustum. For a square mark (aspect ≈ 1) the two formulas are identical.
   const bounds = new THREE.Box2();
   capMesh.points.forEach((point) => bounds.expandByPoint(point));
   const size = new THREE.Vector2();
   bounds.getSize(size);
-  const largestDimension = Math.max(size.x, size.y, 1e-6);
-  const normaliseScale = options.targetSize / largestDimension;
+
+  const sourceArea = Math.max(size.x * size.y, 1e-12);
+  const targetArea = options.targetSize * options.targetSize;
+  let normaliseScale = Math.sqrt(targetArea / sourceArea);
+
+  // Safety: no axis may exceed this multiple of targetSize, so an extreme aspect ratio costs area
+  // rather than leaving the camera frame.
+  const MAX_AXIS_FACTOR = 1.6;
+  const maxAllowed = MAX_AXIS_FACTOR * options.targetSize;
+  const biggestScaled = Math.max(size.x, size.y) * normaliseScale;
+  if (biggestScaled > maxAllowed) normaliseScale *= maxAllowed / biggestScaled;
   const rawCentre = new THREE.Vector2();
   bounds.getCenter(rawCentre);
 
